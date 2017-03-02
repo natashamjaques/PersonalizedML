@@ -43,31 +43,58 @@ DEFAULT_DATA_FILE = 'art_data.pickle'
 
 class NeuralNetwork:
     def __init__(self, filename, layer_sizes=[128,64], batch_size=10, 
-                 learning_rate=.01, dropout_prob=1.0, weight_penalty=0.0):
+                 learning_rate=.01, dropout_prob=1.0, weight_penalty=0.0,
+                 checkpoint_dir='./'):
         '''Initialize the class by loading the required datasets 
         and building the graph.
 
         Args:
-            filename: a file containing the data.'''
-
-        # Extract the data from the filename
-        #self.input_size
-
+            filename: a file containing the data.
+            layer_sizes: a list of sizes of the neural network layers.
+            batch_size: number of training examples in each training batch. 
+            learning_rate: the initial learning rate used in stochastic 
+                gradient descent.
+            dropout_prob: the probability that a node in the network will not
+                be dropped out during training. Set to < 1.0 to apply dropout, 
+                1.0 to remove dropout.
+            weight_penalty: the coefficient of the L2 weight regularization
+                applied to the loss function. Set to > 0.0 to apply weight 
+                regularization, 0.0 to remove.
+            checkpoint_dir: the directly where the model will save checkpoints,
+                saved files containing trained network weights.
+            '''
         # Hyperparameters that should be tuned
         self.layer_sizes = layer_sizes
         self.batch_size = batch_size
         self.learning_rate = learning_rate
-        self.dropout_prob = dropout_prob # set to < 1.0 to apply dropout, 1.0 to remove
-        self.weight_penalty = weight_penalty # set to > 0.0 to apply weight penalty, 0.0 to remove
+        self.dropout_prob = dropout_prob 
+        self.weight_penalty = weight_penalty 
 
         # Hyperparameters that could be tuned 
         # (but are probably the best to use)
         self.activation_func = 'relu'
         self.optimizer = tf.train.AdamOptimizer
 
+        # Logistics
+        self.checkpoint_dir = checkpoint_dir
+        self.filename = filename
+
+        # Extract the data from the filename
+        #self.input_size
+
+        
+
         # Set up tensorflow computation graph.
         self.graph = tf.Graph()
         self.build_graph()
+
+        # Set up and initialize tensorflow session.
+        self.session = tf.Session(graph=self.graph)
+        self.session.run(tf.initialize_all_variables())
+
+        # Use for plotting evaluation.
+        self.train_accuracies = []
+        self.val_accuracies = []
 
     def initialize_network_weights(self):
         """Constructs Tensorflow variables for the weights and biases
@@ -111,7 +138,7 @@ class NeuralNetwork:
             # Placeholders can be used to feed in different data during training time.
             self.tf_X = tf.placeholder(tf.float64, name="X") # features
 		    self.tf_Y = tf.placeholder(tf.float64, name="Y") # labels
-            self.dropout_keep_prob = tf.placeholder(tf.float32) # Implements dropout
+            self.tf_dropout_prob = tf.placeholder(tf.float32) # Implements dropout
 
             # Place the network weights/parameters that will be learned into the 
             # computation graph.
@@ -133,7 +160,7 @@ class NeuralNetwork:
                                 raise ValueError('That activation function has not been implemented.')
 
                             # Apply dropout
-                            hidden = tf.nn.dropout(hidden, self.dropout_keep_prob) 
+                            hidden = tf.nn.dropout(hidden, self.tf_dropout_prob) 
                 return hidden
             self.run_network = run_network
 
@@ -150,36 +177,52 @@ class NeuralNetwork:
             # Predicting a new point
             self.Y_hat = tf.nn.softmax(self.logits)
 
-            self.init = tf.initialize_all_variables()
+            # Code for evaluating the model
+            self.correct_prediction = tf.equal(tf.round(tf.nn.softmax(self.logits)), tf.round(self.tf_Y))
+            all_labels_true = tf.reduce_min(tf.cast(self.correct_prediction), tf.float32), 1)
+            self.accuracy = tf.reduce_mean(all_labels_true)
+    
+    def train(self, num_steps=30000):
+        """Runs batches of training data through the model for a given
+        number of steps.
+        """
+        with self.graph.as_default():
+            # Used to save model checkpoints.
+            self.saver = tf.train.Saver()
 
-    def load_pickled_dataset(self, pickle_file):
-        print "Loading datasets..."
-        with open(pickle_file, 'rb') as f:
-            save = pickle.load(f)
-            self.train_X = save['train_data']
-            self.train_Y = save['train_labels']
-            self.val_X = save['val_data']
-            self.val_Y = save['val_labels']
+            step = 0
+            while step < num_steps:
+                X, Y = self.data_loader.next_batch()
+                feed_dict = {self.tf_X: X,
+                             self.tf_Y: Y
+                             self.tf_dropout_prob: self.dropout_prob}
+                
+                if step % self.output_every != 0:
+                    # Train normally. Do not output results.
+                    _ = self.session.run([self.train_op], feed_dict)
+                else:
+                    # Train and save the training accuracy.
+                    _, train_acc, = self.session.run([self.train_op, self.accuracy], 
+                                                     feed_dict)
+                    
+                    # Test on the validation set, save validation accuracy.
+                    val_X, val_Y = self.data_loader.get_val_data()
+                    feed_dict = {self.tf_X: val_X,
+                                 self.tf_Y: val_Y
+                                 self.tf_dropout_prob: 1.0} # no dropout during evaluation
+                    val_acc = self.session.run([self.accuracy], feed_dict)
 
-            if INCLUDE_TEST_SET:
-                self.test_X = save['test_data']
-                self.test_Y = save['test_labels']
-            del save  # hint to help gc free up memory
-        print 'Training set', self.train_X.shape, self.train_Y.shape
-        print 'Validation set', self.val_X.shape, self.val_Y.shape
-        if INCLUDE_TEST_SET: print 'Test set', self.test_X.shape, self.test_Y.shape
+                    print "Training iteration", step
+                    print "\t Training accuracy", train_acc
+                    print "\t Validation accuracy", val_acc
+                    self.train_accuracies.append(train_acc)
+                    self.val_accuracies.append(val_acc)
 
-
-
-def accuracy(predictions, labels):
-  return (100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1))
-          / predictions.shape[0])
+                    # Save a checkpoint of the model
+                    self.saver.save(self.session, self.checkpoint_dir + 'neural_net.ckpt', global_step=step)
 
 if __name__ == '__main__':
-    invariance = False
-    if len(sys.argv) > 1 and sys.argv[1] == 'invariance':
-        print "Testing finished model on invariance datasets!"
-        invariance = True
+    print "THIS ISN'T IMPLEMENTED YET"
 
     parser = argparse.ArgumentParser(description='Open and query encrypted SQL files')
     parser.add_argument('-k', '--key', dest='key', required=True,
