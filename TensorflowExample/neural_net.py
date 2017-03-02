@@ -5,6 +5,13 @@ import sys
 import math
 import time
 
+ parser = argparse.ArgumentParser(description='Open and query encrypted SQL files')
+parser.add_argument('-k', '--key', dest='key', required=True,
+                       help='Private key to decrypt the files')
+args = parser.parse_args()
+
+rsa_key_name = args.key
+
 DATA_PATH = 'art_data/'
 DATA_FILE = DATA_PATH + 'art_data.pickle'
 IMAGE_SIZE = 50
