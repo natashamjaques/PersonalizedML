@@ -1,18 +1,125 @@
+""" This file provides functions for loading data from a saved 
+    .csv file. 
+
+    The code assumes that the file contains at least one column 
+    with 'label' in the name, containing an outcome we are trying
+    to classify. E.g. if we are trying to predict if someone is 
+    happy or not, we might have a column 'happy_label' that has 
+    values that are either 0 or 1. 
+    
+    We also assume the file contains a column named 'dataset' 
+    containing the dataset the example belongs to, which can be 
+    either 'Train', 'Val', or 'Test'. Remember, it is important 
+    to never train or choose parameters based on the test set!
+"""
+
 import pandas as pd
 
-    def load_pickled_dataset(self, pickle_file):
-        print "Loading datasets..."
-        with open(pickle_file, 'rb') as f:
-            save = pickle.load(f)
-            self.train_X = save['train_data']
-            self.train_Y = save['train_labels']
-            self.val_X = save['val_data']
-            self.val_Y = save['val_labels']
+class DataLoader:
+    def __init__(self, filename):
+        self.load_and_process_data(filename)
 
-            if INCLUDE_TEST_SET:
-                self.test_X = save['test_data']
-                self.test_Y = save['test_labels']
-            del save  # hint to help gc free up memory
-        print 'Training set', self.train_X.shape, self.train_Y.shape
-        print 'Validation set', self.val_X.shape, self.val_Y.shape
-        if INCLUDE_TEST_SET: print 'Test set', self.test_X.shape, self.test_Y.shape
+    def load_and_process_data(self, file_path, suppress_output=False):
+        df = pd.DataFrame.from_csv(file_path)
+
+        self.wanted_feats = [x for x in df.columns.values if 'label' not in x and 'dataset' not in x]
+        self.wanted_labels = [y for y in df.columns.values if 'label' in y]
+
+        self.df = normalize_fill_df(df, self.wanted_feats, self.wanted_labels, 
+                                    suppress_output=suppress_output, remove_cols=True)
+        
+        self.train_X, self.train_Y = get_matrices_for_dataset(self.df, self.wanted_feats, 
+                                                            self.wanted_labels, 'Train')
+        if not suppress_output: print len(self.train_X), "rows in training data"
+        
+        self.val_X, self.val_Y = get_matrices_for_dataset(self.df, self.wanted_feats, 
+                                                        self.wanted_labels, 'Val')
+        if not suppress_output: print len(self.val_X), "rows in validation data"
+        
+        self.test_X, self.test_Y = get_matrices_for_dataset(self.df, self.wanted_feats, 
+                                                            self.wanted_labels, 'Test')
+        if not suppress_output: print len(self.test_X), "rows in testing data"
+    
+    def get_train_batch(self, batch_size):
+        pass
+
+    def get_val_data(self):
+        return self.val_X, self.val_Y
+
+def normalize_fill_df(data_df, wanted_feats, wanted_labels, suppress_output=False, remove_cols=True):
+	data_df = normalize_columns(data_df, wanted_feats)
+	if remove_cols:
+		data_df, wanted_feats = remove_null_cols(data_df, wanted_feats)
+
+	if not suppress_output: print "Original data length was", len(data_df)
+	data_df = data_df.dropna(subset=wanted_labels, how='any')
+	if not suppress_output: print "After dropping rows with nan in any label column, length is", len(data_df)
+
+	data_df = data_df.fillna(0) #if dataset is already filled, won't do anything
+
+	# Shuffle data
+	data_df = data_df.sample(frac=1)
+
+	return data_df
+
+def get_matrices_for_dataset(data_df, wanted_feats, wanted_labels, dataset, single_output=True):
+	set_df = data_df[data_df['dataset']==dataset]
+	
+	X = set_df[wanted_feats].astype(float).as_matrix()
+	
+	if single_output:
+		y = set_df[wanted_labels[0]].tolist()
+	else:
+		y = set_df[wanted_labels].as_matrix()
+	
+	X = convert_matrix_tf_format(X)
+	y = convert_matrix_tf_format(y)
+
+	return X,y
+
+def convert_matrix_tf_format(X):
+	X = np.asarray(X)
+	X = X.astype(np.float32)
+	return X
+
+def normalize_columns(df, wanted_feats):
+	train_df = df[df['dataset']=='Train']
+	for feat in wanted_feats:
+		train_mean = np.mean(train_df[feat].dropna().tolist())
+		train_std = np.std(train_df[feat].dropna().tolist())
+		zscore = lambda x: (x - train_mean) / train_std
+		df[feat] = df[feat].apply(zscore)
+	return df
+
+def find_null_columns(df, features):
+	df_len = len(df)
+	bad_feats = []
+	for feat in features:
+		null_len = len(df[df[feat].isnull()])
+		if df_len == null_len:
+			bad_feats.append(feat)
+	return bad_feats
+
+def remove_null_cols(df, features):
+	'''Must check if a column is completely null in any of the datasets. Then it will remove it'''
+	train_df = df[df['dataset']=='Train']
+	test_df = df[df['dataset']=='Test']
+	val_df = df[df['dataset']=='Val']
+
+	null_cols = find_null_columns(train_df,features)
+	null_cols_test= find_null_columns(test_df,features)
+	null_cols_val = find_null_columns(val_df,features)
+
+	if len(null_cols) > 0 or len(null_cols_test) > 0 or len(null_cols_val) > 0:
+		for feat in null_cols_test:
+			if feat not in null_cols:
+				null_cols.append(feat)
+		for feat in null_cols_val:
+			if feat not in null_cols:
+				null_cols.append(feat)
+		print "Found", len(null_cols), "columns that were completely null. Removing", null_cols
+
+		df = dropCols(df,null_cols)
+		for col in null_cols:
+			features.remove(col)
+	return df, features

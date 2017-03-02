@@ -33,11 +33,12 @@
 
 import tensorflow as tf
 import numpy as np
-from six.moves import cPickle as pickle
 import sys
 import math
 import time
 import argparse
+
+import data_funcs
 
 DEFAULT_DATA_FILE = 'art_data.pickle'
 
@@ -80,6 +81,7 @@ class NeuralNetwork:
         self.filename = filename
 
         # Extract the data from the filename
+        self.data_loader = data_funcs.DataLoader(filename)
         #self.input_size
 
         
@@ -104,30 +106,30 @@ class NeuralNetwork:
         The number of layers and the sizes of each layer are defined
         in the class's layer_sizes field.
         """
-		sizes = []
-		self.weights = []
-		self.biases = []
-		for i in range(len(self.layer_sizes)+1):
-			if i==0:
-				input_len = self.input_size # X second dimension
-			else:
-				input_len = self.layer_sizes[i-1]
-			
-			if i==len(self.layer_sizes):
-				output_len = self.embedding_size
-			else:
-				output_len = self.layer_sizes[i]
-				
-			layer_weights = weight_variable([input_len, output_len],name='weights' + str(i))
-			layer_biases = bias_variable([output_len], name='biases' + str(i))
-			
-			self.weights.append(layer_weights)
-			self.biases.append(layer_biases)
-			sizes.append((str(input_len) + "x" + str(output_len), str(output_len)))
-		
-		if self.verbose:
-			print("Okay, making a neural net with the following structure:")
-			print(sizes)
+        sizes = []
+        self.weights = []
+        self.biases = []
+        for i in range(len(self.layer_sizes)+1):
+            if i==0:
+                input_len = self.input_size # X second dimension
+            else:
+                input_len = self.layer_sizes[i-1]
+            
+            if i==len(self.layer_sizes):
+                output_len = self.embedding_size
+            else:
+                output_len = self.layer_sizes[i]
+                
+            layer_weights = weight_variable([input_len, output_len],name='weights' + str(i))
+            layer_biases = bias_variable([output_len], name='biases' + str(i))
+            
+            self.weights.append(layer_weights)
+            self.biases.append(layer_biases)
+            sizes.append((str(input_len) + "x" + str(output_len), str(output_len)))
+        
+        if self.verbose:
+            print("Okay, making a neural net with the following structure:")
+            print(sizes)
 
     def build_graph(self):
         """Constructs the tensorflow computation graph containing all variables
@@ -137,7 +139,7 @@ class NeuralNetwork:
         with self.graph.as_default():
             # Placeholders can be used to feed in different data during training time.
             self.tf_X = tf.placeholder(tf.float64, name="X") # features
-		    self.tf_Y = tf.placeholder(tf.float64, name="Y") # labels
+            self.tf_Y = tf.placeholder(tf.float64, name="Y") # labels
             self.tf_dropout_prob = tf.placeholder(tf.float32) # Implements dropout
 
             # Place the network weights/parameters that will be learned into the 
@@ -154,7 +156,7 @@ class NeuralNetwork:
                         
                         if i < len(self.weights)-1:
                             # Apply activation function
-                            if self.activation_func == 'relu'
+                            if self.activation_func == 'relu':
                                 hidden = tf.nn.relu(hidden) 
                             else:
                                 raise ValueError('That activation function has not been implemented.')
@@ -179,7 +181,7 @@ class NeuralNetwork:
 
             # Code for evaluating the model
             self.correct_prediction = tf.equal(tf.round(tf.nn.softmax(self.logits)), tf.round(self.tf_Y))
-            all_labels_true = tf.reduce_min(tf.cast(self.correct_prediction), tf.float32), 1)
+            all_labels_true = tf.reduce_min(tf.cast(self.correct_prediction, tf.float32), 1)
             self.accuracy = tf.reduce_mean(all_labels_true)
     
     def train(self, num_steps=30000):
@@ -192,9 +194,9 @@ class NeuralNetwork:
 
             step = 0
             while step < num_steps:
-                X, Y = self.data_loader.next_batch()
+                X, Y = self.data_loader.get_train_batch(self.batch_size)
                 feed_dict = {self.tf_X: X,
-                             self.tf_Y: Y
+                             self.tf_Y: Y,
                              self.tf_dropout_prob: self.dropout_prob}
                 
                 if step % self.output_every != 0:
@@ -208,7 +210,7 @@ class NeuralNetwork:
                     # Test on the validation set, save validation accuracy.
                     val_X, val_Y = self.data_loader.get_val_data()
                     feed_dict = {self.tf_X: val_X,
-                                 self.tf_Y: val_Y
+                                 self.tf_Y: val_Y,
                                  self.tf_dropout_prob: 1.0} # no dropout during evaluation
                     val_acc = self.session.run([self.accuracy], feed_dict)
 
