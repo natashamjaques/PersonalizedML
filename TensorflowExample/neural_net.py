@@ -1,46 +1,82 @@
+""" Code that implements a basic fully-connected neural network 
+    in Tensorflow. 
+
+    Neural networks have many parameters that can be tuned. You can 
+    tweak the parameters when running this code by feeding them 
+    into the class constructor, or simply through command line 
+    arguments. For example:
+        python neural_net.py --learning_rate .001
+    sets the learning rate to .001. To see all of the parameters 
+    that can be tweaked via the command line, scroll down to the 
+    __main__ function.
+
+    Tensorflow is an efficient framework for training neural 
+    networks. Rather than running the code purely in python, it 
+    does most of its computational in C. In order to do this, it 
+    requires that you set up a pre-defined computation Graph, 
+    which contains tensors - variables that do not necessarily 
+    store actual values until they are evaluated. The graph 
+    determines the flow of information through the neural network. 
+    Backpropagation is automatically performed for all variables 
+    in the graph that contribute to computing the outcome that we 
+    are trying to optimize. When we are ready to train the model,
+    we initialize a Session and start feeding data into the Graph. 
+    You can read more about how Tensorflow works at 
+    https://www.tensorflow.org/versions/r0.11/get_started/basic_usage
+
+    This code implements simple fully-connected network layers. To
+    learn how to build a convolutional network, please see:
+    https://www.tensorflow.org/tutorials/deep_cnn
+    To learn about recurrent neural networks, see:
+    https://www.tensorflow.org/tutorials/recurrent
+"""
+
 import tensorflow as tf
 import numpy as np
 from six.moves import cPickle as pickle
 import sys
 import math
 import time
+import argparse
 
- parser = argparse.ArgumentParser(description='Open and query encrypted SQL files')
-parser.add_argument('-k', '--key', dest='key', required=True,
-                       help='Private key to decrypt the files')
-args = parser.parse_args()
-
-rsa_key_name = args.key
-
-DATA_PATH = 'art_data/'
-DATA_FILE = DATA_PATH + 'art_data.pickle'
-IMAGE_SIZE = 50
-NUM_CHANNELS = 3
-NUM_LABELS = 11
-INCLUDE_TEST_SET = False
+DEFAULT_DATA_FILE = 'art_data.pickle'
 
 class NeuralNetwork:
-    def __init__(self, filename):
+    def __init__(self, filename, layer_sizes=[128,64], batch_size=10, 
+                 learning_rate=.01, dropout_prob=1.0, weight_penalty=0.0):
         '''Initialize the class by loading the required datasets 
         and building the graph.
 
         Args:
             filename: a file containing the data.'''
 
-        self.input_size
+        # Extract the data from the filename
+        #self.input_size
 
         # Hyperparameters that should be tuned
-        self.batch_size = 10
-        self.learning_rate = 0.01
-        self.layer_sizes = [128,64]
-        self.dropout_prob = 1.0 # set to < 1.0 to apply dropout, 1.0 to remove
-        self.weight_penalty = 0.0 # set to > 0.0 to apply weight penalty, 0.0 to remove
+        self.layer_sizes = layer_sizes
+        self.batch_size = batch_size
+        self.learning_rate = learning_rate
+        self.dropout_prob = dropout_prob # set to < 1.0 to apply dropout, 1.0 to remove
+        self.weight_penalty = weight_penalty # set to > 0.0 to apply weight penalty, 0.0 to remove
+
+        # Hyperparameters that could be tuned 
+        # (but are probably the best to use)
+        self.activation_func = 'relu'
+        self.optimizer = tf.train.AdamOptimizer
 
         # Set up tensorflow computation graph.
         self.graph = tf.Graph()
         self.build_graph()
 
     def initialize_network_weights(self):
+        """Constructs Tensorflow variables for the weights and biases
+        in each layer of the graph. These variables will be updated
+        as the network learns.
+
+        The number of layers and the sizes of each layer are defined
+        in the class's layer_sizes field.
+        """
 		sizes = []
 		self.weights = []
 		self.biases = []
@@ -67,147 +103,54 @@ class NeuralNetwork:
 			print(sizes)
 
     def build_graph(self):
+        """Constructs the tensorflow computation graph containing all variables
+        that will be trained."""
         print '\nBuilding computation graph...'
 
         with self.graph.as_default():
-            # Input data
-            tf_train_batch = tf.placeholder(
-                tf.float32, shape=(batch_size, IMAGE_SIZE, IMAGE_SIZE, NUM_CHANNELS))
-            tf_train_labels = tf.placeholder(tf.float32, shape=(batch_size, NUM_LABELS))
-            tf_valid_dataset = tf.constant(self.val_X)
-            tf_test_dataset = tf.placeholder(
-                tf.float32, shape=[len(self.val_X), IMAGE_SIZE, IMAGE_SIZE, NUM_CHANNELS])
-            tf_train_dataset = tf.placeholder(
-                tf.float32, shape=[len(self.train_X), IMAGE_SIZE, IMAGE_SIZE, NUM_CHANNELS])
+            # Placeholders can be used to feed in different data during training time.
+            self.tf_X = tf.placeholder(tf.float64, name="X") # features
+		    self.tf_Y = tf.placeholder(tf.float64, name="Y") # labels
+            self.dropout_keep_prob = tf.placeholder(tf.float32) # Implements dropout
 
-            # Implement dropout
-            dropout_keep_prob = tf.placeholder(tf.float32)
+            # Place the network weights/parameters that will be learned into the 
+            # computation graph.
+            self.initialize_network_weights()
 
-            # Network weights/parameters that will be learned
-            layer1_weights = tf.Variable(tf.truncated_normal(
-                [layer1_filter_size, layer1_filter_size, NUM_CHANNELS, layer1_depth], stddev=0.1))
-            layer1_biases = tf.Variable(tf.zeros([layer1_depth]))
-            layer1_feat_map_size = int(math.ceil(float(IMAGE_SIZE) / layer1_stride))
-            if pooling:
-                layer1_feat_map_size = int(math.ceil(float(layer1_feat_map_size) / layer1_pool_stride))
-
-            layer2_weights = tf.Variable(tf.truncated_normal(
-                [layer2_filter_size, layer2_filter_size, layer1_depth, layer2_depth], stddev=0.1))
-            layer2_biases = tf.Variable(tf.constant(1.0, shape=[layer2_depth]))
-            layer2_feat_map_size = int(math.ceil(float(layer1_feat_map_size) / layer2_stride))
-            if pooling:
-                layer2_feat_map_size = int(math.ceil(float(layer2_feat_map_size) / layer2_pool_stride))
-
-            layer3_weights = tf.Variable(tf.truncated_normal(
-                [layer2_feat_map_size * layer2_feat_map_size * layer2_depth, layer3_num_hidden], stddev=0.1))
-            layer3_biases = tf.Variable(tf.constant(1.0, shape=[layer3_num_hidden]))
-
-            new_layer_weights = tf.Variable(tf.truncated_normal(
-                [layer3_num_hidden, new_layer_num_hidden], stddev=0.1))
-            new_layer_biases = tf.Variable(tf.constant(1.0, shape=[new_layer_num_hidden]))
-
-            layer4_weights = tf.Variable(tf.truncated_normal(
-              [new_layer_num_hidden, NUM_LABELS], stddev=0.1))
-            layer4_biases = tf.Variable(tf.constant(1.0, shape=[NUM_LABELS]))
-
-            # Model
-            def network_model(data):
-                '''Define the actual network architecture'''
-
-                # Layer 1
-                conv1 = tf.nn.conv2d(data, layer1_weights, [1, layer1_stride, layer1_stride, 1], padding='SAME')
-                hidden = tf.nn.relu(conv1 + layer1_biases)
-
-                if pooling:
-                    hidden = tf.nn.max_pool(hidden, ksize=[1, layer1_pool_filter_size, layer1_pool_filter_size, 1], 
-                                       strides=[1, layer1_pool_stride, layer1_pool_stride, 1],
-                                        padding='SAME', name='pool1')
-                
-                # Layer 2
-                conv2 = tf.nn.conv2d(hidden, layer2_weights, [1, layer2_stride, layer2_stride, 1], padding='SAME')
-                hidden = tf.nn.relu(conv2 + layer2_biases)
-
-                if pooling:
-                    hidden = tf.nn.max_pool(hidden, ksize=[1, layer2_pool_filter_size, layer2_pool_filter_size, 1], 
-                                       strides=[1, layer2_pool_stride, layer2_pool_stride, 1],
-                                        padding='SAME', name='pool2')
-                
-                # Layer 3
-                shape = hidden.get_shape().as_list()
-                reshape = tf.reshape(hidden, [shape[0], shape[1] * shape[2] * shape[3]])
-                hidden = tf.nn.relu(tf.matmul(reshape, layer3_weights) + layer3_biases)
-                hidden = tf.nn.dropout(hidden, dropout_keep_prob)
-
-                # new layer
-                hidden = tf.nn.relu(tf.matmul(hidden, new_layer_weights) + new_layer_biases)
-                hidden = tf.nn.dropout(hidden, dropout_keep_prob)
-
-                # Layer 4 
-                output = tf.matmul(hidden, layer4_weights) + layer4_biases
-                return output
-
-            # Training computation
-            logits = network_model(tf_train_batch)
-            loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits, tf_train_labels))
-
-            # Add weight decay penalty
-            loss = loss + weight_decay_penalty([layer3_weights, layer4_weights], weight_penalty)
-
-            # Optimizer
-            optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss)
-
-            # Predictions for the training, validation, and test data.
-            batch_prediction = tf.nn.softmax(logits)
-            valid_prediction = tf.nn.softmax(network_model(tf_valid_dataset))
-            test_prediction = tf.nn.softmax(network_model(tf_test_dataset))
-            train_prediction = tf.nn.softmax(network_model(tf_train_dataset))
-
-            def train_model(num_steps=num_training_steps):
-                '''Train the model with minibatches in a tensorflow session'''
-                with tf.Session(graph=self.graph) as session:
-                    tf.initialize_all_variables().run()
-                    print 'Initializing variables...'
-                    
-                    for step in range(num_steps):
-                        offset = (step * batch_size) % (self.train_Y.shape[0] - batch_size)
-                        batch_data = self.train_X[offset:(offset + batch_size), :, :, :]
-                        batch_labels = self.train_Y[offset:(offset + batch_size), :]
+            # Defines the actual network computations using the weights. 
+            def run_network(input_X):
+                hidden = input_X
+                for i in range(len(self.weights)):
+                    with tf.name_scope('layer' + str(i)) as scope:
+                        # tf.matmul is a simple fully connected layer. 
+                        hidden = tf.matmul(hidden, self.weights[i]) + self.biases[i]
                         
-                        # Data to feed into the placeholder variables in the tensorflow graph
-                        feed_dict = {tf_train_batch : batch_data, tf_train_labels : batch_labels, 
-                                     dropout_keep_prob: dropout_prob}
-                        _, l, predictions = session.run(
-                          [optimizer, loss, batch_prediction], feed_dict=feed_dict)
-                        if (step % 100 == 0):
-                            train_preds = session.run(train_prediction, feed_dict={tf_train_dataset: self.train_X,
-                                                                           dropout_keep_prob : 1.0})
-                            val_preds = session.run(valid_prediction, feed_dict={dropout_keep_prob : 1.0})
-                            print ''
-                            print('Batch loss at step %d: %f' % (step, l))
-                            print('Batch training accuracy: %.1f%%' % accuracy(predictions, batch_labels))
-                            print('Validation accuracy: %.1f%%' % accuracy(val_preds, self.val_Y))
-                            print('Full train accuracy: %.1f%%' % accuracy(train_preds, self.train_Y))
+                        if i < len(self.weights)-1:
+                            # Apply activation function
+                            if self.activation_func == 'relu'
+                                hidden = tf.nn.relu(hidden) 
+                            else:
+                                raise ValueError('That activation function has not been implemented.')
 
-                    # This code is for the final question
-                    if self.invariance:
-                        print "\n Obtaining final results on invariance sets!"
-                        sets = [self.val_X, self.translated_val_X, self.bright_val_X, self.dark_val_X, 
-                                self.high_contrast_val_X, self.low_contrast_val_X, self.flipped_val_X, 
-                                self.inverted_val_X,]
-                        set_names = ['normal validation', 'translated', 'brightened', 'darkened', 
-                                     'high contrast', 'low contrast', 'flipped', 'inverted']
-                        
-                        for i in range(len(sets)):
-                            preds = session.run(test_prediction, 
-                                feed_dict={tf_test_dataset: sets[i], dropout_keep_prob : 1.0})
-                            print 'Accuracy on', set_names[i], 'data: %.1f%%' % accuracy(preds, self.val_Y)
+                            # Apply dropout
+                            hidden = tf.nn.dropout(hidden, self.dropout_keep_prob) 
+                return hidden
+            self.run_network = run_network
 
-                            # save final preds to make confusion matrix
-                            if i == 0:
-                                self.final_val_preds = preds 
-            
-            # save train model function so it can be called later
-            self.train_model = train_model
+            # Compute the loss function
+            self.logits = run_network(self.tf_X)
+            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(self.logits, self.tf_Y))
+
+            # Add weight decay regularization term to loss
+            self.loss += self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])
+
+            # Set up backpropagation computation!
+            self.opt_step = self.optimizer(self.learning_rate).minimize(self.loss)
+
+            # Predicting a new point
+            self.Y_hat = tf.nn.softmax(self.logits)
+
+            self.init = tf.initialize_all_variables()
 
     def load_pickled_dataset(self, pickle_file):
         print "Loading datasets..."
@@ -226,20 +169,7 @@ class NeuralNetwork:
         print 'Validation set', self.val_X.shape, self.val_Y.shape
         if INCLUDE_TEST_SET: print 'Test set', self.test_X.shape, self.test_Y.shape
 
-    def load_invariance_datasets(self):
-        with open(DATA_PATH + 'invariance_art_data.pickle', 'rb') as f:
-            save = pickle.load(f)
-            self.translated_val_X = save['translated_val_data']
-            self.flipped_val_X = save['flipped_val_data']
-            self.inverted_val_X = save['inverted_val_data']
-            self.bright_val_X = save['bright_val_data']
-            self.dark_val_X = save['dark_val_data']
-            self.high_contrast_val_X = save['high_contrast_val_data']
-            self.low_contrast_val_X = save['low_contrast_val_data']
-            del save  
 
-def weight_decay_penalty(weights, penalty):
-    return penalty * sum([tf.nn.l2_loss(w) for w in weights])
 
 def accuracy(predictions, labels):
   return (100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1))
@@ -250,6 +180,11 @@ if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == 'invariance':
         print "Testing finished model on invariance datasets!"
         invariance = True
+
+    parser = argparse.ArgumentParser(description='Open and query encrypted SQL files')
+    parser.add_argument('-k', '--key', dest='key', required=True,
+                        help='Private key to decrypt the files')
+    args = parser.parse_args()
     
     t1 = time.time()
     conv_net = ArtistConvNet(invariance=invariance)
