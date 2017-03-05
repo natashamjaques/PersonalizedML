@@ -1,6 +1,0 @@
-model_checkpoint_path: "xor_classifier.ckpt-190"
-all_model_checkpoint_paths: "xor_classifier.ckpt-150"
-all_model_checkpoint_paths: "xor_classifier.ckpt-160"
-all_model_checkpoint_paths: "xor_classifier.ckpt-170"
-all_model_checkpoint_paths: "xor_classifier.ckpt-180"
-all_model_checkpoint_paths: "xor_classifier.ckpt-190"

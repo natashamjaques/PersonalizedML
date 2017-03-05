@@ -182,21 +182,33 @@ class NeuralNetwork:
 
             # Compute the loss function
             self.logits = run_network(self.tf_X)
-            self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.logits, 
-                                                                                      labels=self.tf_Y))
 
-            # Add weight decay regularization term to loss
-            self.loss += self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])
+            if self.output_type == 'classification':
+                # Apply a softmax function to get probabilities, train this dist against targets with
+                # cross entropy loss.
+                self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.logits, 
+                                                                                          labels=self.tf_Y))
+
+                 # Add weight decay regularization term to loss
+                self.loss += self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])
+
+                # Code for making predictions and evaluating them.
+                self.class_probabilities = tf.nn.softmax(self.logits)
+                self.predictions = tf.argmax(self.class_probabilities, axis=1)
+                self.correct_prediction = tf.equal(self.predictions, self.tf_Y)
+                self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32))
+            
+            elif self.output_type == 'regression':
+                # Apply mean squared error loss.
+                self.rmse = tf.sqrt(tf.reduce_mean(tf.square(tf.sub(self.logits, self.tf_Y))))
+                
+                 # Add weight decay regularization term to loss
+                self.loss = self.rmse + self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])
 
             # Set up backpropagation computation!
             self.opt_step = self.optimizer(self.learning_rate).minimize(self.loss)
 
-            # Code for making predictions and evaluating them.
-            self.class_probabilities = tf.nn.softmax(self.logits)
-            self.predictions = tf.argmax(self.class_probabilities, axis=1)
-            self.correct_prediction = tf.equal(self.predictions, self.tf_Y)
-            self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32))
-
+            # Necessary for tensorflow to build graph
             self.init = tf.global_variables_initializer()
 
     def train(self, num_steps=30000, output_every_nth=None):
