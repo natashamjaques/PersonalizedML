@@ -1,6 +1,0 @@
-model_checkpoint_path: "sin_regressor.ckpt-2700"
-all_model_checkpoint_paths: "sin_regressor.ckpt-1500"
-all_model_checkpoint_paths: "sin_regressor.ckpt-1800"
-all_model_checkpoint_paths: "sin_regressor.ckpt-2100"
-all_model_checkpoint_paths: "sin_regressor.ckpt-2400"
-all_model_checkpoint_paths: "sin_regressor.ckpt-2700"
