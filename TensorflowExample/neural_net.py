@@ -48,8 +48,9 @@ def reload_files():
 
 class NeuralNetwork:
     def __init__(self, filename, model_name, layer_sizes=[128,64], batch_size=10, 
-                 learning_rate=.01, dropout_prob=1.0, weight_penalty=0.0,
-                 output_type='classification', checkpoint_dir='./saved_models/'):
+                 learning_rate=.01, dropout_prob=1.0, weight_penalty=0.0, 
+                 clip_gradients=True, output_type='classification', 
+                 checkpoint_dir='./saved_models/'):
         '''Initialize the class by loading the required datasets 
         and building the graph.
 
@@ -81,6 +82,7 @@ class NeuralNetwork:
 
         # Hyperparameters that could be tuned 
         # (but are probably the best to use)
+        self.clip_gradients = clip_gradients
         self.activation_func = 'relu'
         self.optimizer = tf.train.AdamOptimizer
 
@@ -214,7 +216,14 @@ class NeuralNetwork:
                 self.loss = self.rmse + self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])
 
             # Set up backpropagation computation!
-            self.opt_step = self.optimizer(self.learning_rate).minimize(self.loss)
+            self.global_step = tf.Variable(0, trainable=False, name='global_step')
+            self.params = tf.trainable_variables()
+            self.gradients = tf.gradients(self.loss, self.params)
+            if self.clip_gradients:
+                self.gradients, _ = tf.clip_by_global_norm(self.gradients, 5)
+            self.tf_optimizer = self.optimizer(self.learning_rate)
+            self.opt_step = self.tf_optimizer.apply_gradients(zip(self.gradients, self.params),
+                                                              self.global_step)
 
             # Necessary for tensorflow to build graph
             self.init = tf.global_variables_initializer()
