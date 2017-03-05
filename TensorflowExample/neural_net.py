@@ -33,6 +33,7 @@
 
 import tensorflow as tf
 import numpy as np
+import matplotlib.pyplot as plt
 import sys
 import math
 import time
@@ -42,15 +43,20 @@ import data_funcs
 
 DEFAULT_DATA_FILE = 'art_data.pickle'
 
+def reload_files():
+    reload(data_funcs)
+
 class NeuralNetwork:
-    def __init__(self, filename, layer_sizes=[128,64], batch_size=10, 
+    def __init__(self, filename, model_name, layer_sizes=[128,64], batch_size=10, 
                  learning_rate=.01, dropout_prob=1.0, weight_penalty=0.0,
-                 checkpoint_dir='./'):
+                 output_type='classification', checkpoint_dir='./saved_models/'):
         '''Initialize the class by loading the required datasets 
         and building the graph.
 
         Args:
             filename: a file containing the data.
+            model_name: name of the model being trained. Used in saving
+                model checkpoints.
             layer_sizes: a list of sizes of the neural network layers.
             batch_size: number of training examples in each training batch. 
             learning_rate: the initial learning rate used in stochastic 
@@ -61,6 +67,8 @@ class NeuralNetwork:
             weight_penalty: the coefficient of the L2 weight regularization
                 applied to the loss function. Set to > 0.0 to apply weight 
                 regularization, 0.0 to remove.
+            output_type: the type of output prediction. Either 'classification'
+                or 'regression'.
             checkpoint_dir: the directly where the model will save checkpoints,
                 saved files containing trained network weights.
             '''
@@ -79,12 +87,19 @@ class NeuralNetwork:
         # Logistics
         self.checkpoint_dir = checkpoint_dir
         self.filename = filename
+        self.model_name = model_name
+        self.output_type = output_type
+        self.output_every_nth = 100
 
         # Extract the data from the filename
         self.data_loader = data_funcs.DataLoader(filename)
-        #self.input_size
-
-        
+        self.input_size = self.data_loader.get_feature_size()
+        if output_type == 'classification':
+            self.output_size = self.data_loader.num_classes
+        else:
+            self.output_size = self.data_loader.num_outputs
+        print "Input dimensions", self.input_size
+        print "Number of classes/outputs", self.output_size
 
         # Set up tensorflow computation graph.
         self.graph = tf.Graph()
@@ -92,7 +107,7 @@ class NeuralNetwork:
 
         # Set up and initialize tensorflow session.
         self.session = tf.Session(graph=self.graph)
-        self.session.run(tf.initialize_all_variables())
+        self.session.run(self.init)
 
         # Use for plotting evaluation.
         self.train_accuracies = []
@@ -116,7 +131,7 @@ class NeuralNetwork:
                 input_len = self.layer_sizes[i-1]
             
             if i==len(self.layer_sizes):
-                output_len = self.embedding_size
+                output_len = self.output_size
             else:
                 output_len = self.layer_sizes[i]
                 
@@ -127,9 +142,8 @@ class NeuralNetwork:
             self.biases.append(layer_biases)
             sizes.append((str(input_len) + "x" + str(output_len), str(output_len)))
         
-        if self.verbose:
-            print("Okay, making a neural net with the following structure:")
-            print(sizes)
+        print("Okay, making a neural net with the following structure:")
+        print(sizes)
 
     def build_graph(self):
         """Constructs the tensorflow computation graph containing all variables
@@ -139,8 +153,8 @@ class NeuralNetwork:
         with self.graph.as_default():
             # Placeholders can be used to feed in different data during training time.
             self.tf_X = tf.placeholder(tf.float64, name="X") # features
-            self.tf_Y = tf.placeholder(tf.float64, name="Y") # labels
-            self.tf_dropout_prob = tf.placeholder(tf.float32) # Implements dropout
+            self.tf_Y = tf.placeholder(tf.int64, name="Y") # labels
+            self.tf_dropout_prob = tf.placeholder(tf.float64) # Implements dropout
 
             # Place the network weights/parameters that will be learned into the 
             # computation graph.
@@ -168,7 +182,8 @@ class NeuralNetwork:
 
             # Compute the loss function
             self.logits = run_network(self.tf_X)
-            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(self.logits, self.tf_Y))
+            self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.logits, 
+                                                                                      labels=self.tf_Y))
 
             # Add weight decay regularization term to loss
             self.loss += self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])
@@ -180,14 +195,44 @@ class NeuralNetwork:
             self.Y_hat = tf.nn.softmax(self.logits)
 
             # Code for evaluating the model
-            self.correct_prediction = tf.equal(tf.round(tf.nn.softmax(self.logits)), tf.round(self.tf_Y))
+            self.predictions = tf.argmax(tf.nn.softmax(self.logits), axis=1)
+            self.correct_prediction = tf.equal(self.predictions, self.tf_Y) #replaced tf.round with tf.argmax
             all_labels_true = tf.reduce_min(tf.cast(self.correct_prediction, tf.float32), 1)
             self.accuracy = tf.reduce_mean(all_labels_true)
+
+            self.init = tf.global_variables_initializer()
     
-    def train(self, num_steps=30000):
+    def plot_binary_classification_data(self, with_decision_boundary=False):
+        """ This function only works if there are two input features"""
+        class1_X, class2_X = self.data_loader.get_train_binary_classification_data()
+        
+        plt.figure()
+        plt.scatter(class1_X[:,0],class1_X[:,1], color='b')
+        plt.scatter(class2_X[:,0],class2_X[:,1], color='r')
+        
+        if with_decision_boundary:
+            pass
+
+        plt.show()
+
+    def plot_regression_data(self):
+        """sorted_val_x = sorted(dgp.val_X)
+        mu, var = dgp.predict(sorted_val_x)
+
+        plt.figure(figsize=(12, 6))
+        plt.plot(dgp.df['X'], dgp.df['label'], 'x')
+        plt.plot(sorted_val_x, mu, color='r', lw=2)
+        plt.plot(sorted_val_x, mu + 2*np.sqrt(var), '--', color='r')
+        plt.plot(sorted_val_x, mu - 2*np.sqrt(var), '--', color='r')"""
+        print "THIS FUNCTION ISN'T FINISHED YET"
+
+    def train(self, num_steps=30000, output_every_nth=None):
         """Runs batches of training data through the model for a given
         number of steps.
         """
+        if output_every_nth is not None:
+            self.output_every_nth = output_every_nth
+
         with self.graph.as_default():
             # Used to save model checkpoints.
             self.saver = tf.train.Saver()
@@ -199,7 +244,7 @@ class NeuralNetwork:
                              self.tf_Y: Y,
                              self.tf_dropout_prob: self.dropout_prob}
                 
-                if step % self.output_every != 0:
+                if step % self.output_every_nth != 0:
                     # Train normally. Do not output results.
                     _ = self.session.run([self.train_op], feed_dict)
                 else:
@@ -221,7 +266,19 @@ class NeuralNetwork:
                     self.val_accuracies.append(val_acc)
 
                     # Save a checkpoint of the model
-                    self.saver.save(self.session, self.checkpoint_dir + 'neural_net.ckpt', global_step=step)
+                    self.saver.save(self.session, self.checkpoint_dir + self.model_name + '.ckpt', global_step=step)
+    
+    def plot_training_progress(self):
+        plt.figure()
+
+
+def weight_variable(shape,name):
+	initial = tf.truncated_normal(shape, stddev=1.0 / math.sqrt(float(shape[0])), dtype=tf.float64)
+	return tf.Variable(initial, name=name)
+
+def bias_variable(shape, name):
+	initial = tf.constant(0.1, shape=shape, dtype=tf.float64)
+	return tf.Variable(initial, name=name)
 
 if __name__ == '__main__':
     print "THIS ISN'T IMPLEMENTED YET"
