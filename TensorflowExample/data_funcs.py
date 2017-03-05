@@ -96,7 +96,6 @@ def get_matrices_for_dataset(data_df, wanted_feats, wanted_labels, dataset, sing
     
     X = convert_matrix_tf_format(X)
     y = np.asarray(y)
-    y = y.astype(np.int64)
 
     return X,y
 

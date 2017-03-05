@@ -95,12 +95,16 @@ class NeuralNetwork:
         self.data_loader = data_funcs.DataLoader(filename)
         self.input_size = self.data_loader.get_feature_size()
         if output_type == 'classification':
+            print "\nPerforming classification."
             self.output_size = self.data_loader.num_classes
+            self.metric_name = 'accuracy'
         else:
+            print "\nPerforming regression."
             self.output_size = self.data_loader.num_outputs
-        print "Input dimensions", self.input_size
-        print "Number of classes/outputs", self.output_size
-
+            self.metric_name = 'RMSE'
+        print "Input dimensions (number of features):", self.input_size
+        print "Number of classes/outputs:", self.output_size
+        
         # Set up tensorflow computation graph.
         self.graph = tf.Graph()
         self.build_graph()
@@ -110,8 +114,8 @@ class NeuralNetwork:
         self.session.run(self.init)
 
         # Use for plotting evaluation.
-        self.train_accuracies = []
-        self.val_accuracies = []
+        self.train_metrics = []
+        self.val_metrics = []
 
     def initialize_network_weights(self):
         """Constructs Tensorflow variables for the weights and biases
@@ -153,7 +157,10 @@ class NeuralNetwork:
         with self.graph.as_default():
             # Placeholders can be used to feed in different data during training time.
             self.tf_X = tf.placeholder(tf.float64, name="X") # features
-            self.tf_Y = tf.placeholder(tf.int64, name="Y") # labels
+            if self.output_type == 'classification':
+                self.tf_Y = tf.placeholder(tf.int64, name="Y") # labels
+            else: # regression
+                self.tf_Y = tf.placeholder(tf.float64, name="Y") # labels
             self.tf_dropout_prob = tf.placeholder(tf.float64) # Implements dropout
 
             # Place the network weights/parameters that will be learned into the 
@@ -198,9 +205,10 @@ class NeuralNetwork:
                 self.correct_prediction = tf.equal(self.predictions, self.tf_Y)
                 self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32))
             
-            elif self.output_type == 'regression':
+            else: # regression
                 # Apply mean squared error loss.
-                self.rmse = tf.sqrt(tf.reduce_mean(tf.square(tf.sub(self.logits, self.tf_Y))))
+                self.squared_errors = tf.square(tf.subtract(tf.reshape(self.logits, [-1]), self.tf_Y))
+                self.rmse = tf.sqrt(tf.reduce_mean(self.squared_errors))
                 
                  # Add weight decay regularization term to loss
                 self.loss = self.rmse + self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])
@@ -223,30 +231,36 @@ class NeuralNetwork:
             self.saver = tf.train.Saver()
 
             for step in range(num_steps):
+                # Grab a batch of data to feed into the placeholders in the graph.
                 X, Y = self.data_loader.get_train_batch(self.batch_size)
                 feed_dict = {self.tf_X: X,
                              self.tf_Y: Y,
                              self.tf_dropout_prob: self.dropout_prob}
-                if step % self.output_every_nth != 0:
-                    # Train normally. Do not output results.
-                    _ = self.session.run([self.opt_step], feed_dict)
-                else:
-                    # Train and save the training accuracy.
-                    _, train_acc, = self.session.run([self.opt_step, self.accuracy], 
-                                                     feed_dict)
-                    
-                    # Test on the validation set, save validation accuracy.
-                    val_X, val_Y = self.data_loader.get_val_data()
-                    feed_dict = {self.tf_X: val_X,
-                                 self.tf_Y: val_Y,
-                                 self.tf_dropout_prob: 1.0} # no dropout during evaluation
-                    val_acc = self.session.run([self.accuracy], feed_dict)
+                
+                # Update parameters in the direction of the gradient computed by
+                # the optimizer.
+                _ = self.session.run([self.opt_step], feed_dict)
 
+                # Output/save the training and validation performance every few steps.
+                if step % self.output_every_nth == 0:
+                    # Grab a batch of validation data too.
+                    val_X, val_Y = self.data_loader.get_val_data()
+                    val_feed_dict = {self.tf_X: val_X,
+                                     self.tf_Y: val_Y,
+                                     self.tf_dropout_prob: 1.0} # no dropout during evaluation
+
+                    if self.output_type == 'classification':
+                        train_score = self.session.run(self.accuracy, feed_dict)
+                        val_score = self.session.run(self.accuracy, val_feed_dict)
+                    else: # regression
+                        train_score = self.session.run(self.rmse, feed_dict)
+                        val_score = self.session.run(self.rmse, val_feed_dict)
+                    
                     print "Training iteration", step
-                    print "\t Training accuracy", train_acc
-                    print "\t Validation accuracy", val_acc
-                    self.train_accuracies.append(train_acc)
-                    self.val_accuracies.append(val_acc)
+                    print "\t Training", self.metric_name, train_score
+                    print "\t Validation", self.metric_name, val_score
+                    self.train_metrics.append(train_score)
+                    self.val_metrics.append(val_score)
 
                     # Save a checkpoint of the model
                     self.saver.save(self.session, self.checkpoint_dir + self.model_name + '.ckpt', global_step=step)
@@ -254,21 +268,25 @@ class NeuralNetwork:
     def predict(self, X, get_probabilities=False):
         feed_dict = {self.tf_X: X,
                      self.tf_dropout_prob: 1.0} # no dropout during evaluation
-        probs, preds = self.session.run([self.class_probabilities, self.predictions], 
-                                          feed_dict)
-        if get_probabilities:
-            return preds, probs
-        else:
-            return preds
+        
+        if self.output_type == 'classification':
+            probs, preds = self.session.run([self.class_probabilities, self.predictions], 
+                                            feed_dict)
+            if get_probabilities:
+                return preds, probs
+            else:
+                return preds
+        else: # regression
+            return self.session.run(self.logits, feed_dict)
     
     def plot_training_progress(self):
-        x = [self.output_every_nth * i for i in np.arange(len(self.train_accuracies))]
+        x = [self.output_every_nth * i for i in np.arange(len(self.train_metrics))]
         plt.figure()
-        plt.plot(x,self.train_accuracies)
-        plt.plot(x,self.val_accuracies)
+        plt.plot(x,self.train_metrics)
+        plt.plot(x,self.val_metrics)
         plt.legend(['Train', 'Validation'], loc='best')
         plt.xlabel('Training epoch')
-        plt.ylabel('Accuracy')
+        plt.ylabel(self.metric_name)
         plt.show()
 
     def plot_binary_classification_data(self, with_decision_boundary=False):
@@ -298,17 +316,16 @@ class NeuralNetwork:
 
         plt.show()
 
-    def plot_regression_data(self):
-        """sorted_val_x = sorted(dgp.val_X)
-        mu, var = dgp.predict(sorted_val_x)
-
-        plt.figure(figsize=(12, 6))
-        plt.plot(dgp.df['X'], dgp.df['label'], 'x')
-        plt.plot(sorted_val_x, mu, color='r', lw=2)
-        plt.plot(sorted_val_x, mu + 2*np.sqrt(var), '--', color='r')
-        plt.plot(sorted_val_x, mu - 2*np.sqrt(var), '--', color='r')"""
-        print "THIS FUNCTION ISN'T FINISHED YET"
-
+    def plot_regression_data(self, with_decision_boundary=False):
+        plt.figure()
+        plt.scatter(self.data_loader.train_X, self.data_loader.train_Y)
+        
+        if with_decision_boundary:
+            sorted_x = sorted(self.data_loader.train_X)
+            preds = self.predict(sorted_x)
+            plt.plot(sorted_x, preds, color='r', lw=2)
+        
+        plt.show()
 
 def weight_variable(shape,name):
 	initial = tf.truncated_normal(shape, stddev=1.0 / math.sqrt(float(shape[0])), dtype=tf.float64)
