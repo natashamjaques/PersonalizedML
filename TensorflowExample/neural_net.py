@@ -3,12 +3,7 @@
 
     Neural networks have many parameters that can be tuned. You can 
     tweak the parameters when running this code by feeding them 
-    into the class constructor, or simply through command line 
-    arguments. For example:
-        python neural_net.py --learning_rate .001
-    sets the learning rate to .001. To see all of the parameters 
-    that can be tweaked via the command line, scroll down to the 
-    __main__ function.
+    into the class constructor.
 
     Tensorflow is an efficient framework for training neural 
     networks. Rather than running the code purely in python, it 
@@ -336,6 +331,32 @@ class NeuralNetwork:
         
         plt.show()
 
+    def test_on_validation(self):
+        score = self.get_performance_on_data(self.data_loader.val_X,
+                                             self.data_loader.val_Y)
+        print "Final", self.metric_name, "on validation data is:", score
+        return score
+        
+    def test_on_test(self):
+        print "WARNING! Only test on the test set when you have finished choosing all of your hyperparameters!"
+        print "\tNever use the test set to choose hyperparameters!!!"
+        score = self.get_performance_on_data(self.data_loader.test_X,
+                                             self.data_loader.test_Y)
+        print "Final", self.metric_name, "on test data is:", score
+        return score
+
+    def get_performance_on_data(self, X, Y):
+        feed_dict = {self.tf_X: X,
+                     self.tf_Y: Y,
+                     self.tf_dropout_prob: 1.0} # no dropout during evaluation
+        
+        if self.output_type == 'classification':
+            score = self.session.run(self.accuracy, feed_dict)
+        else: # regression
+            score = self.session.run(self.rmse, feed_dict)
+        
+        return score
+
 def weight_variable(shape,name):
 	initial = tf.truncated_normal(shape, stddev=1.0 / math.sqrt(float(shape[0])), dtype=tf.float64)
 	return tf.Variable(initial, name=name)
@@ -343,17 +364,3 @@ def weight_variable(shape,name):
 def bias_variable(shape, name):
 	initial = tf.constant(0.1, shape=shape, dtype=tf.float64)
 	return tf.Variable(initial, name=name)
-
-if __name__ == '__main__':
-    print "THIS ISN'T IMPLEMENTED YET"
-
-    parser = argparse.ArgumentParser(description='Open and query encrypted SQL files')
-    parser.add_argument('-k', '--key', dest='key', required=True,
-                        help='Private key to decrypt the files')
-    args = parser.parse_args()
-    
-    t1 = time.time()
-    conv_net = ArtistConvNet(invariance=invariance)
-    conv_net.train_model()
-    t2 = time.time()
-    print "Finished training. Total time taken:", t2-t1
