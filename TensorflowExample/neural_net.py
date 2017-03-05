@@ -400,10 +400,10 @@ def weight_variable(shape,name):
     """Initializes a tensorflow weight variable with random
     values centered around 0.
     """
-	initial = tf.truncated_normal(shape, stddev=1.0 / math.sqrt(float(shape[0])), dtype=tf.float64)
-	return tf.Variable(initial, name=name)
+    initial = tf.truncated_normal(shape, stddev=1.0 / math.sqrt(float(shape[0])), dtype=tf.float64)
+    return tf.Variable(initial, name=name)
 
 def bias_variable(shape, name):
     """Initializes a tensorflow bias variable to a small constant value."""
-	initial = tf.constant(0.1, shape=shape, dtype=tf.float64)
-	return tf.Variable(initial, name=name)
+    initial = tf.constant(0.1, shape=shape, dtype=tf.float64)
+    return tf.Variable(initial, name=name)
