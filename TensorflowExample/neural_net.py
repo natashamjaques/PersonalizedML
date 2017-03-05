@@ -89,7 +89,7 @@ class NeuralNetwork:
         self.filename = filename
         self.model_name = model_name
         self.output_type = output_type
-        self.output_every_nth = 100
+        self.output_every_nth = 10
 
         # Extract the data from the filename
         self.data_loader = data_funcs.DataLoader(filename)
@@ -191,40 +191,13 @@ class NeuralNetwork:
             # Set up backpropagation computation!
             self.opt_step = self.optimizer(self.learning_rate).minimize(self.loss)
 
-            # Predicting a new point
-            self.Y_hat = tf.nn.softmax(self.logits)
-
-            # Code for evaluating the model
-            self.predictions = tf.argmax(tf.nn.softmax(self.logits), axis=1)
-            self.correct_prediction = tf.equal(self.predictions, self.tf_Y) #replaced tf.round with tf.argmax
-            all_labels_true = tf.reduce_min(tf.cast(self.correct_prediction, tf.float32), 1)
-            self.accuracy = tf.reduce_mean(all_labels_true)
+            # Code for making predictions and evaluating them.
+            self.class_probabilities = tf.nn.softmax(self.logits)
+            self.predictions = tf.argmax(self.class_probabilities, axis=1)
+            self.correct_prediction = tf.equal(self.predictions, self.tf_Y)
+            self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32))
 
             self.init = tf.global_variables_initializer()
-    
-    def plot_binary_classification_data(self, with_decision_boundary=False):
-        """ This function only works if there are two input features"""
-        class1_X, class2_X = self.data_loader.get_train_binary_classification_data()
-        
-        plt.figure()
-        plt.scatter(class1_X[:,0],class1_X[:,1], color='b')
-        plt.scatter(class2_X[:,0],class2_X[:,1], color='r')
-        
-        if with_decision_boundary:
-            pass
-
-        plt.show()
-
-    def plot_regression_data(self):
-        """sorted_val_x = sorted(dgp.val_X)
-        mu, var = dgp.predict(sorted_val_x)
-
-        plt.figure(figsize=(12, 6))
-        plt.plot(dgp.df['X'], dgp.df['label'], 'x')
-        plt.plot(sorted_val_x, mu, color='r', lw=2)
-        plt.plot(sorted_val_x, mu + 2*np.sqrt(var), '--', color='r')
-        plt.plot(sorted_val_x, mu - 2*np.sqrt(var), '--', color='r')"""
-        print "THIS FUNCTION ISN'T FINISHED YET"
 
     def train(self, num_steps=30000, output_every_nth=None):
         """Runs batches of training data through the model for a given
@@ -237,19 +210,17 @@ class NeuralNetwork:
             # Used to save model checkpoints.
             self.saver = tf.train.Saver()
 
-            step = 0
-            while step < num_steps:
+            for step in range(num_steps):
                 X, Y = self.data_loader.get_train_batch(self.batch_size)
                 feed_dict = {self.tf_X: X,
                              self.tf_Y: Y,
                              self.tf_dropout_prob: self.dropout_prob}
-                
                 if step % self.output_every_nth != 0:
                     # Train normally. Do not output results.
-                    _ = self.session.run([self.train_op], feed_dict)
+                    _ = self.session.run([self.opt_step], feed_dict)
                 else:
                     # Train and save the training accuracy.
-                    _, train_acc, = self.session.run([self.train_op, self.accuracy], 
+                    _, train_acc, = self.session.run([self.opt_step, self.accuracy], 
                                                      feed_dict)
                     
                     # Test on the validation set, save validation accuracy.
@@ -268,8 +239,63 @@ class NeuralNetwork:
                     # Save a checkpoint of the model
                     self.saver.save(self.session, self.checkpoint_dir + self.model_name + '.ckpt', global_step=step)
     
+    def predict(self, X, get_probabilities=False):
+        feed_dict = {self.tf_X: X,
+                     self.tf_dropout_prob: 1.0} # no dropout during evaluation
+        probs, preds = self.session.run([self.class_probabilities, self.predictions], 
+                                          feed_dict)
+        if get_probabilities:
+            return preds, probs
+        else:
+            return preds
+    
     def plot_training_progress(self):
+        x = [self.output_every_nth * i for i in np.arange(len(self.train_accuracies))]
         plt.figure()
+        plt.plot(x,self.train_accuracies)
+        plt.plot(x,self.val_accuracies)
+        plt.legend(['Train', 'Validation'], loc='best')
+        plt.xlabel('Training epoch')
+        plt.ylabel('Accuracy')
+        plt.show()
+
+    def plot_binary_classification_data(self, with_decision_boundary=False):
+        """ This function only works if there are two input features"""
+        class1_X, class2_X = self.data_loader.get_train_binary_classification_data()
+        
+        plt.figure()
+        plt.scatter(class1_X[:,0],class1_X[:,1], color='b')
+        plt.scatter(class2_X[:,0],class2_X[:,1], color='r')
+        
+        if with_decision_boundary:
+            # Make a mesh of points on which to make predictions
+            mesh_step_size = .1
+            x1_min = self.data_loader.train_X[:, 0].min() - 1
+            x1_max = self.data_loader.train_X[:, 0].max() + 1
+            x2_min = self.data_loader.train_X[:, 1].min() - 1
+            x2_max = self.data_loader.train_X[:, 1].max() + 1
+            xx1, xx2 = np.meshgrid(np.arange(x1_min, x1_max, mesh_step_size),
+                                   np.arange(x2_min, x2_max, mesh_step_size))
+            
+            # Make predictions for each point in the mesh
+            Z = self.predict(np.c_[xx1.ravel(), xx2.ravel()])
+
+            # Use matplotlib contour function to show decision boundary on mesh
+            Z = Z.reshape(xx1.shape)
+            plt.contour(xx1, xx2, Z, cmap=plt.cm.Paired)
+
+        plt.show()
+
+    def plot_regression_data(self):
+        """sorted_val_x = sorted(dgp.val_X)
+        mu, var = dgp.predict(sorted_val_x)
+
+        plt.figure(figsize=(12, 6))
+        plt.plot(dgp.df['X'], dgp.df['label'], 'x')
+        plt.plot(sorted_val_x, mu, color='r', lw=2)
+        plt.plot(sorted_val_x, mu + 2*np.sqrt(var), '--', color='r')
+        plt.plot(sorted_val_x, mu - 2*np.sqrt(var), '--', color='r')"""
+        print "THIS FUNCTION ISN'T FINISHED YET"
 
 
 def weight_variable(shape,name):

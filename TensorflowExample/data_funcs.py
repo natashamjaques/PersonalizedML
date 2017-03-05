@@ -46,7 +46,7 @@ class DataLoader:
         if not suppress_output: print len(self.test_X), "rows in testing data"
     
     def get_train_batch(self, batch_size):
-        idx = np.random.choice(len(self.train_X, size=batch_size))
+        idx = np.random.choice(len(self.train_X), size=batch_size)
         return self.train_X[idx], self.train_Y[idx]
 
     def get_val_data(self):
