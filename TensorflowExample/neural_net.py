@@ -63,6 +63,9 @@ class NeuralNetwork:
             weight_penalty: the coefficient of the L2 weight regularization
                 applied to the loss function. Set to > 0.0 to apply weight 
                 regularization, 0.0 to remove.
+            clip_gradients: a bool indicating whether or not to clip gradients. 
+                This is effective in preventing very large gradients from skewing 
+                training, and preventing your loss from going to inf or nan. 
             output_type: the type of output prediction. Either 'classification'
                 or 'regression'.
             checkpoint_dir: the directly where the model will save checkpoints,
@@ -176,8 +179,8 @@ class NeuralNetwork:
                             # Apply activation function
                             if self.activation_func == 'relu':
                                 hidden = tf.nn.relu(hidden) 
-                            else:
-                                raise ValueError('That activation function has not been implemented.')
+                            # Could add more activation functions like sigmoid here
+                            # If no activation is specified, none will be applied
 
                             # Apply dropout
                             hidden = tf.nn.dropout(hidden, self.tf_dropout_prob) 
@@ -224,8 +227,15 @@ class NeuralNetwork:
             self.init = tf.global_variables_initializer()
 
     def train(self, num_steps=30000, output_every_nth=None):
-        """Runs batches of training data through the model for a given
+        """Trains using stochastic gradient descent (SGD). 
+        
+        Runs batches of training data through the model for a given
         number of steps.
+
+        Note that if you set the class's batch size to the number
+        of points in the training data, you would be doing gradient
+        descent rather than SGD. SGD is preferred since it has a 
+        strong regularizing effect.
         """
         if output_every_nth is not None:
             self.output_every_nth = output_every_nth
@@ -270,6 +280,20 @@ class NeuralNetwork:
                     self.saver.save(self.session, self.checkpoint_dir + self.model_name + '.ckpt', global_step=step)
     
     def predict(self, X, get_probabilities=False):
+        """Gets the network's predictions for some new data X
+        
+        Args: 
+            X: a matrix of data in the same format as the training
+                data. 
+            get_probabilities: a boolean that if true, will cause 
+                the function to return the model's computed softmax
+                probabilities in addition to its predictions. Only 
+                works for classification.
+        Returns:
+            integer class predictions if the model is doing 
+            classification, otherwise float predictions if the 
+            model is doing regression.
+        """
         feed_dict = {self.tf_X: X,
                      self.tf_dropout_prob: 1.0} # no dropout during evaluation
         
@@ -284,6 +308,8 @@ class NeuralNetwork:
             return self.session.run(self.logits, feed_dict)
     
     def plot_training_progress(self):
+        """Plots the training and validation performance as evaluated 
+        throughout training."""
         x = [self.output_every_nth * i for i in np.arange(len(self.train_metrics))]
         plt.figure()
         plt.plot(x,self.train_metrics)
@@ -294,7 +320,12 @@ class NeuralNetwork:
         plt.show()
 
     def plot_binary_classification_data(self, with_decision_boundary=False):
-        """ This function only works if there are two input features"""
+        """Plots the data from each of two binary classes with two different
+        colours. If with_decision_boundary is set to true, also plots the 
+        decision boundary learned by the model.
+        
+        Note: This function only works if there are two input features.
+        """
         class1_X, class2_X = self.data_loader.get_train_binary_classification_data()
         
         plt.figure()
@@ -321,6 +352,11 @@ class NeuralNetwork:
         plt.show()
 
     def plot_regression_data(self, with_decision_boundary=False):
+        """Plots input regression data. If with_decision_boundary is set 
+        to true, also plots the regression function learned by the model.
+        
+        Note: This function only works if there is one input feature.
+        """
         plt.figure()
         plt.scatter(self.data_loader.train_X, self.data_loader.train_Y)
         
@@ -332,12 +368,14 @@ class NeuralNetwork:
         plt.show()
 
     def test_on_validation(self):
+        """Returns performance on the model's validation set."""
         score = self.get_performance_on_data(self.data_loader.val_X,
                                              self.data_loader.val_Y)
         print "Final", self.metric_name, "on validation data is:", score
         return score
         
     def test_on_test(self):
+        """Returns performance on the model's test set."""
         print "WARNING! Only test on the test set when you have finished choosing all of your hyperparameters!"
         print "\tNever use the test set to choose hyperparameters!!!"
         score = self.get_performance_on_data(self.data_loader.test_X,
@@ -346,6 +384,7 @@ class NeuralNetwork:
         return score
 
     def get_performance_on_data(self, X, Y):
+        """Returns the model's performance on input data X and targets Y."""
         feed_dict = {self.tf_X: X,
                      self.tf_Y: Y,
                      self.tf_dropout_prob: 1.0} # no dropout during evaluation
@@ -358,9 +397,13 @@ class NeuralNetwork:
         return score
 
 def weight_variable(shape,name):
+    """Initializes a tensorflow weight variable with random
+    values centered around 0.
+    """
 	initial = tf.truncated_normal(shape, stddev=1.0 / math.sqrt(float(shape[0])), dtype=tf.float64)
 	return tf.Variable(initial, name=name)
 
 def bias_variable(shape, name):
+    """Initializes a tensorflow bias variable to a small constant value."""
 	initial = tf.constant(0.1, shape=shape, dtype=tf.float64)
 	return tf.Variable(initial, name=name)
