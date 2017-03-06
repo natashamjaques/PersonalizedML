@@ -34,9 +34,14 @@ import math
 import time
 import argparse
 
-import data_funcs
-
-DEFAULT_DATA_FILE = 'art_data.pickle'
+CODE_PATH = '/Users/natasha/Developer/PersonalizedMachineLearning/'
+sys.path.append(CODE_PATH)
+try:
+    import data_funcs
+except:
+    print "ERROR! Could not import data_funcs.py from repo."
+    print "Make sure you provide the location of this file using the"
+    print "CODE_PATH variable on line 37 of neural_net.py"
 
 def reload_files():
     reload(data_funcs)
