@@ -30,18 +30,14 @@ import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
+import os
 import math
 import time
-import argparse
 
-CODE_PATH = '/Users/natasha/Developer/PersonalizedMachineLearning/'
+# Import data loading functions from parent directory.
+CODE_PATH = os.path.dirname(os.getcwd())
 sys.path.append(CODE_PATH)
-try:
-    import data_funcs
-except:
-    print "ERROR! Could not import data_funcs.py from repo."
-    print "Make sure you provide the location of this file using the"
-    print "CODE_PATH variable on line 37 of neural_net.py"
+import data_funcs
 
 def reload_files():
     reload(data_funcs)
