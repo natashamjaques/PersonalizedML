@@ -45,7 +45,7 @@ def reload_files():
 class NeuralNetwork:
     def __init__(self, filename, model_name, layer_sizes=[128,64], batch_size=10, 
                  learning_rate=.01, dropout_prob=1.0, weight_penalty=0.0, 
-                 clip_gradients=True, output_type='classification', 
+                 clip_gradients=True, model_type='classification', 
                  checkpoint_dir='./saved_models/'):
         '''Initialize the class by loading the required datasets 
         and building the graph.
@@ -67,7 +67,7 @@ class NeuralNetwork:
             clip_gradients: a bool indicating whether or not to clip gradients. 
                 This is effective in preventing very large gradients from skewing 
                 training, and preventing your loss from going to inf or nan. 
-            output_type: the type of output prediction. Either 'classification'
+            model_type: the type of output prediction. Either 'classification'
                 or 'regression'.
             checkpoint_dir: the directly where the model will save checkpoints,
                 saved files containing trained network weights.
@@ -89,13 +89,13 @@ class NeuralNetwork:
         self.checkpoint_dir = checkpoint_dir
         self.filename = filename
         self.model_name = model_name
-        self.output_type = output_type
+        self.model_type = model_type
         self.output_every_nth = 10
 
         # Extract the data from the filename
         self.data_loader = data_funcs.DataLoader(filename)
         self.input_size = self.data_loader.get_feature_size()
-        if output_type == 'classification':
+        if model_type == 'classification':
             print "\nPerforming classification."
             self.output_size = self.data_loader.num_classes
             self.metric_name = 'accuracy'
@@ -158,7 +158,7 @@ class NeuralNetwork:
         with self.graph.as_default():
             # Placeholders can be used to feed in different data during training time.
             self.tf_X = tf.placeholder(tf.float64, name="X") # features
-            if self.output_type == 'classification':
+            if self.model_type == 'classification':
                 self.tf_Y = tf.placeholder(tf.int64, name="Y") # labels
             else: # regression
                 self.tf_Y = tf.placeholder(tf.float64, name="Y") # labels
@@ -191,7 +191,7 @@ class NeuralNetwork:
             # Compute the loss function
             self.logits = run_network(self.tf_X)
 
-            if self.output_type == 'classification':
+            if self.model_type == 'classification':
                 # Apply a softmax function to get probabilities, train this dist against targets with
                 # cross entropy loss.
                 self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.logits, 
@@ -264,7 +264,7 @@ class NeuralNetwork:
                                      self.tf_Y: val_Y,
                                      self.tf_dropout_prob: 1.0} # no dropout during evaluation
 
-                    if self.output_type == 'classification':
+                    if self.model_type == 'classification':
                         train_score = self.session.run(self.accuracy, feed_dict)
                         val_score = self.session.run(self.accuracy, val_feed_dict)
                     else: # regression
@@ -298,7 +298,7 @@ class NeuralNetwork:
         feed_dict = {self.tf_X: X,
                      self.tf_dropout_prob: 1.0} # no dropout during evaluation
         
-        if self.output_type == 'classification':
+        if self.model_type == 'classification':
             probs, preds = self.session.run([self.class_probabilities, self.predictions], 
                                             feed_dict)
             if get_probabilities:
@@ -390,7 +390,7 @@ class NeuralNetwork:
                      self.tf_Y: Y,
                      self.tf_dropout_prob: 1.0} # no dropout during evaluation
         
-        if self.output_type == 'classification':
+        if self.model_type == 'classification':
             score = self.session.run(self.accuracy, feed_dict)
         else: # regression
             score = self.session.run(self.rmse, feed_dict)
