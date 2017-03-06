@@ -1,19 +1,19 @@
 """ Code that provides a wrapper around sklearn SVC class to make it easier to use.
 
     This implements a soft-margin SVM, which is able to mis-classify some points
-    while incurring a penalty for those points in the objective function. The 
-    parameter C controls how heavily the classifier is penalized for mis-classified
+    while incurring a penalty for such points in the objective function. The 
+    parameter C controls how heavily the classifier is penalized for misclassified
     points.
     
     SVMs depend on the kernel function, which maps the original feature space into 
     a new feature space. In this implementation, the kernel can be:
         - linear: Just the dot product
-        - rbf: Gaussian radial basis function: exp(-gamma * ||x - x'||2) 
+        - rbf: radial basis function: exp(-gamma * ||x - x'||2) 
                The parameter to tune is gamma. A large gamma means a more complex
                function (high variance), while a small gamma means a smoother
                decision boundary (high bias).
-        - poly: A polynomial kernel: raises the dot product kernel to the power of \
-               poly_degree.
+        - poly: A polynomial kernel: raises the dot product kernel to the power of
+                poly_degree.
 
     For more information on support vector machines in scikit learn,
     see: http://scikit-learn.org/stable/modules/svm.html
@@ -53,7 +53,6 @@ class SVM:
             tolerance: a float epsilon value. If the loss function changes by only
                 tolerance or less, the funtion will stop training.
         """
-
         # Load the data.
         self.data_loader = data_funcs.DataLoader(filename)
 
