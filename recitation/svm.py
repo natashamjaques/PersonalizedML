@@ -68,23 +68,32 @@ class SVM:
         self.classifier = None
 
     def train(self):
+        """Initializes a classifier with right parameters and fits it according to its optimization
+        objective."""
         self.classifier = SVC(C=self.C, kernel=self.kernel, probability=True, gamma=self.gamma, 
                               degree=self.poly_degree, max_iter=self.max_iter, tol=self.tolerance)
         self.classifier.fit(self.data_loader.train_X, self.data_loader.train_Y)
 
     def predict(self, X):
+        """Gets the classifier's predicted class for each data point in every row of X."""
         return self.classifier.predict(X)
 
     def get_accuracy(self, X, Y):
-        #returns accuracy
+        """Returns the classification accuracy of the classifier's predictions on data points in X 
+        compared to their ground truth labels in Y. """
         return self.classifier.score(X, Y)
 
     def get_fpr_and_tpr(self,X,Y):
+        """Gets the false positive rate and true positive rate from the classifier's predictions on
+        data in X as compared to the ground truth labels in Y."""
         probas_ = self.classifier.fit(self.data_loader.train_X, self.data_loader.train_Y).predict_proba(X)
         fpr, tpr, thresholds = roc_curve(Y, probas_[:, 1])
         return fpr, tpr
 
     def get_auc(self,X,Y):
+        """Gets the Area Under the Curve (AUC) score. This is area under the Receiver Operating 
+        Characteristic curve, and is a measure of how balanced the classifier is in terms of false 
+        negatives vs. false positives."""
         fpr, tpr = self.get_fpr_and_tpr(X,Y)
         return auc(fpr,tpr)
 
@@ -106,20 +115,26 @@ class SVM:
         return acc, auc
         
     def get_num_support_vectors(self):
+        """Gets the number of support vectors used in forming the decision boundary."""
         return self.classifier.n_support_
 
     def get_hinge_loss(self,X,Y):
+        """Computes hinge loss on the predictions made by the classifier on data points X compared
+        to ground truth labels Y."""
         preds = self.predict(X)
         hinge_inner_func = 1.0 - preds*Y
         hinge_inner_func = [max(0,x) for x in hinge_inner_func]
         return sum(hinge_inner_func)
 
     def save_to_file(self, filepath):
+        """Saves the trained classifier to a pickle file."""
         s = pickle.dumps(self.classifier)
         f = open(filepath, 'w')
         f.write(s)
 
     def load_from_file(self, filepath):
+        """Loads a trained classifier from a pickle file. Warning: does not load the hyperparameters
+        used to train the classifier into the main class."""
         f2 = open(filepath, 'r')
         s2 = f2.read()
         self.classifier = pickle.loads(s2)
