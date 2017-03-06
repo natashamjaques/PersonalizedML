@@ -65,7 +65,7 @@ class TFRegressor:
         self.learning_rate = learning_rate
         self.weight_penalty = weight_penalty 
 
-        # Optimization function to use to train the model. 
+        # Optimization function used to train the model. 
         # It's widely accepted that the Adam optimizer rules ---
         # I mean, is state-of-the-art --- but you could choose 
         # others, like tf.train.AdagradOptimizer, or even
@@ -304,8 +304,8 @@ class TFRegressor:
         return score
 
 def weight_variable(shape,name):
-    """Initializes a tensorflow weight variable with random
-    values centered around 0.
+    """Initializes a tensorflow weight variable with random values 
+    centered around 0.
     """
     initial = tf.truncated_normal(shape, stddev=1.0 / math.sqrt(float(shape[0])), dtype=tf.float64)
     return tf.Variable(initial, name=name)
