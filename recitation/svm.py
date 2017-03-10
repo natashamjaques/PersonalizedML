@@ -164,8 +164,11 @@ class SVM:
             # Make predictions for each point in the mesh
             Z = self.predict(np.c_[xx1.ravel(), xx2.ravel()])
 
-            # Use matplotlib contour function to show decision boundary on mesh
-            Z = Z.reshape(xx1.shape)
-            plt.contour(xx1, xx2, Z, cmap=plt.cm.Paired)
+            if np.sum(Z) != 0:
+                # Use matplotlib contour function to show decision boundary on mesh
+                Z = Z.reshape(xx1.shape)
+                plt.contour(xx1, xx2, Z, cmap=plt.cm.Paired)
+            else:
+                print "Error: the classifier always predicts 0, so it is impossible to draw a decision boundary."
 
         plt.show()
