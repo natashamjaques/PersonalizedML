@@ -38,9 +38,10 @@ import time
 CODE_PATH = os.path.dirname(os.getcwd())
 sys.path.append(CODE_PATH)
 import data_funcs
+import imp
 
 def reload_files():
-    reload(data_funcs)
+    imp.reload(data_funcs)
 
 class NeuralNetwork:
     def __init__(self, filename, model_name, layer_sizes=[128,64], batch_size=10, 
@@ -96,15 +97,15 @@ class NeuralNetwork:
         self.data_loader = data_funcs.DataLoader(filename)
         self.input_size = self.data_loader.get_feature_size()
         if model_type == 'classification':
-            print "\nPerforming classification."
+            print("\nPerforming classification.")
             self.output_size = self.data_loader.num_classes
             self.metric_name = 'accuracy'
         else:
-            print "\nPerforming regression."
+            print("\nPerforming regression.")
             self.output_size = self.data_loader.num_outputs
             self.metric_name = 'RMSE'
-        print "Input dimensions (number of features):", self.input_size
-        print "Number of classes/outputs:", self.output_size
+        print("Input dimensions (number of features):", self.input_size)
+        print("Number of classes/outputs:", self.output_size)
         
         # Set up tensorflow computation graph.
         self.graph = tf.Graph()
@@ -153,7 +154,7 @@ class NeuralNetwork:
     def build_graph(self):
         """Constructs the tensorflow computation graph containing all variables
         that will be trained."""
-        print '\nBuilding computation graph...'
+        print('\nBuilding computation graph...')
 
         with self.graph.as_default():
             # Placeholders can be used to feed in different data during training time.
@@ -271,9 +272,9 @@ class NeuralNetwork:
                         train_score = self.session.run(self.rmse, feed_dict)
                         val_score = self.session.run(self.rmse, val_feed_dict)
                     
-                    print "Training iteration", step
-                    print "\t Training", self.metric_name, train_score
-                    print "\t Validation", self.metric_name, val_score
+                    print("Training iteration", step)
+                    print("\t Training", self.metric_name, train_score)
+                    print("\t Validation", self.metric_name, val_score)
                     self.train_metrics.append(train_score)
                     self.val_metrics.append(val_score)
 
@@ -372,13 +373,13 @@ class NeuralNetwork:
         """Returns performance on the model's validation set."""
         score = self.get_performance_on_data(self.data_loader.val_X,
                                              self.data_loader.val_Y)
-        print "Final", self.metric_name, "on validation data is:", score
+        print("Final", self.metric_name, "on validation data is:", score)
         return score
         
     def test_on_test(self):
         """Returns performance on the model's test set."""
-        print "WARNING! Only test on the test set when you have finished choosing all of your hyperparameters!"
-        print "\tNever use the test set to choose hyperparameters!!!"
+        print("WARNING! Only test on the test set when you have finished choosing all of your hyperparameters!")
+        print("\tNever use the test set to choose hyperparameters!!!")
         score = self.get_performance_on_data(self.data_loader.test_X,
                                              self.data_loader.test_Y)
         print "Final", self.metric_name, "on test data is:", score
