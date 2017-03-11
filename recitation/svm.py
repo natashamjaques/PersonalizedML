@@ -100,17 +100,17 @@ class SVM:
         """Returns performance on the model's validation set."""
         acc = self.get_accuracy(self.data_loader.val_X, self.data_loader.val_Y)
         auc = self.get_auc(self.data_loader.val_X, self.data_loader.val_Y)
-        print "Final results on validation data:", acc, "accuracy", auc, "AUC"
+        print("Final results on validation data:", acc, "accuracy", auc, "AUC")
         return acc, auc
 
     def test_on_test(self):
         """Returns performance on the model's test set."""
-        print "WARNING! Only test on the test set when you have finished choosing all of your hyperparameters!"
-        print "\tNever use the test set to choose hyperparameters!!!"
+        print("WARNING! Only test on the test set when you have finished choosing all of your hyperparameters!")
+        print("\tNever use the test set to choose hyperparameters!!!")
         
         acc = self.get_accuracy(self.data_loader.test_X, self.data_loader.test_Y)
         auc = self.get_auc(self.data_loader.test_X, self.data_loader.test_Y)
-        print "Final results on test data!!", acc, "accuracy", auc, "AUC"
+        print("Final results on test data!!", acc, "accuracy", auc, "AUC")
         return acc, auc
         
     def get_num_support_vectors(self):
@@ -169,6 +169,6 @@ class SVM:
                 Z = Z.reshape(xx1.shape)
                 plt.contour(xx1, xx2, Z, cmap=plt.cm.Paired)
             else:
-                print "Error: the classifier always predicts 0, so it is impossible to draw a decision boundary."
+                print("Error: the classifier always predicts 0, so it is impossible to draw a decision boundary.")
 
         plt.show()

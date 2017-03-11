@@ -35,15 +35,15 @@ class DataLoader:
 
         self.train_X, self.train_Y = get_matrices_for_dataset(self.df, self.wanted_feats, 
                                                             self.wanted_labels, 'Train')
-        if not suppress_output: print len(self.train_X), "rows in training data"
+        if not suppress_output: print(len(self.train_X), "rows in training data")
         
         self.val_X, self.val_Y = get_matrices_for_dataset(self.df, self.wanted_feats, 
                                                         self.wanted_labels, 'Val')
-        if not suppress_output: print len(self.val_X), "rows in validation data"
+        if not suppress_output: print(len(self.val_X), "rows in validation data")
         
         self.test_X, self.test_Y = get_matrices_for_dataset(self.df, self.wanted_feats, 
                                                             self.wanted_labels, 'Test')
-        if not suppress_output: print len(self.test_X), "rows in testing data"
+        if not suppress_output: print(len(self.test_X), "rows in testing data")
     
     def get_train_batch(self, batch_size):
         idx = np.random.choice(len(self.train_X), size=batch_size)
@@ -73,9 +73,9 @@ def normalize_fill_df(data_df, wanted_feats, wanted_labels, suppress_output=Fals
     if remove_cols:
         data_df, wanted_feats = remove_null_cols(data_df, wanted_feats)
 
-    if not suppress_output: print "Original data length was", len(data_df)
+    if not suppress_output: print("Original data length was", len(data_df))
     data_df = data_df.dropna(subset=wanted_labels, how='any')
-    if not suppress_output: print "After dropping rows with nan in any label column, length is", len(data_df)
+    if not suppress_output: print("After dropping rows with nan in any label column, length is", len(data_df))
 
     data_df = data_df.fillna(0) #if dataset is already filled, won't do anything
 
@@ -139,7 +139,7 @@ def remove_null_cols(df, features):
         for feat in null_cols_val:
             if feat not in null_cols:
                 null_cols.append(feat)
-        print "Found", len(null_cols), "columns that were completely null. Removing", null_cols
+        print("Found", len(null_cols), "columns that were completely null. Removing", null_cols)
 
         df = dropCols(df,null_cols)
         for col in null_cols:
