@@ -382,7 +382,7 @@ class NeuralNetwork:
         print("\tNever use the test set to choose hyperparameters!!!")
         score = self.get_performance_on_data(self.data_loader.test_X,
                                              self.data_loader.test_Y)
-        print "Final", self.metric_name, "on test data is:", score
+        print("Final", self.metric_name, "on test data is:", score)
         return score
 
     def get_performance_on_data(self, X, Y):
