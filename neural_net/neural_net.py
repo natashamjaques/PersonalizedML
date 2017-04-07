@@ -36,7 +36,7 @@ import time
 
 # Import data loading functions from parent directory.
 CODE_PATH = os.path.dirname(os.getcwd())
-sys.path.append(CODE_PATH)
+sys.path.insert(1, CODE_PATH)
 import data_funcs
 
 def reload_files():
@@ -157,12 +157,12 @@ class NeuralNetwork:
 
         with self.graph.as_default():
             # Placeholders can be used to feed in different data during training time.
-            self.tf_X = tf.placeholder(tf.float64, name="X") # features
+            self.tf_X = tf.placeholder(tf.float32, name="X") # features
             if self.model_type == 'classification':
-                self.tf_Y = tf.placeholder(tf.int64, name="Y") # labels
+                self.tf_Y = tf.placeholder(tf.int32, name="Y") # labels
             else: # regression
-                self.tf_Y = tf.placeholder(tf.float64, name="Y") # labels
-            self.tf_dropout_prob = tf.placeholder(tf.float64) # Implements dropout
+                self.tf_Y = tf.placeholder(tf.float32, name="Y") # labels
+            self.tf_dropout_prob = tf.placeholder(tf.float32) # Implements dropout
 
             # Place the network weights/parameters that will be learned into the 
             # computation graph.
@@ -194,8 +194,9 @@ class NeuralNetwork:
             if self.model_type == 'classification':
                 # Apply a softmax function to get probabilities, train this dist against targets with
                 # cross entropy loss.
+                flat_labels = tf.reshape(self.tf_Y, [-1])
                 self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.logits, 
-                                                                                          labels=self.tf_Y))
+                                                                                          labels=flat_labels))
 
                  # Add weight decay regularization term to loss
                 self.loss += self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])
@@ -203,12 +204,12 @@ class NeuralNetwork:
                 # Code for making predictions and evaluating them.
                 self.class_probabilities = tf.nn.softmax(self.logits)
                 self.predictions = tf.argmax(self.class_probabilities, axis=1)
-                self.correct_prediction = tf.equal(self.predictions, self.tf_Y)
+                self.correct_prediction = tf.equal(tf.cast(self.predictions, dtype=tf.int32), self.tf_Y)
                 self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32))
             
             else: # regression
                 # Apply mean squared error loss.
-                self.squared_errors = tf.square(tf.subtract(tf.reshape(self.logits, [-1]), self.tf_Y))
+                self.squared_errors = tf.square(tf.subtract(self.logits, self.tf_Y))
                 self.rmse = tf.sqrt(tf.reduce_mean(self.squared_errors))
                 
                  # Add weight decay regularization term to loss
@@ -265,15 +266,16 @@ class NeuralNetwork:
                                      self.tf_dropout_prob: 1.0} # no dropout during evaluation
 
                     if self.model_type == 'classification':
-                        train_score = self.session.run(self.accuracy, feed_dict)
-                        val_score = self.session.run(self.accuracy, val_feed_dict)
+                        train_score, loss = self.session.run([self.accuracy, self.loss], feed_dict)
+                        val_score, loss = self.session.run([self.accuracy, self.loss], val_feed_dict)
                     else: # regression
-                        train_score = self.session.run(self.rmse, feed_dict)
-                        val_score = self.session.run(self.rmse, val_feed_dict)
+                        train_score, loss = self.session.run([self.rmse, self.loss], feed_dict)
+                        val_score, loss = self.session.run([self.rmse, self.loss],  val_feed_dict)
                     
                     print "Training iteration", step
                     print "\t Training", self.metric_name, train_score
                     print "\t Validation", self.metric_name, val_score
+                    print "\t Loss", loss
                     self.train_metrics.append(train_score)
                     self.val_metrics.append(val_score)
 
@@ -401,10 +403,10 @@ def weight_variable(shape,name):
     """Initializes a tensorflow weight variable with random
     values centered around 0.
     """
-    initial = tf.truncated_normal(shape, stddev=1.0 / math.sqrt(float(shape[0])), dtype=tf.float64)
+    initial = tf.truncated_normal(shape, stddev=1.0 / math.sqrt(float(shape[0])), dtype=tf.float32)
     return tf.Variable(initial, name=name)
 
 def bias_variable(shape, name):
     """Initializes a tensorflow bias variable to a small constant value."""
-    initial = tf.constant(0.1, shape=shape, dtype=tf.float64)
+    initial = tf.constant(0.1, shape=shape, dtype=tf.float32)
     return tf.Variable(initial, name=name)

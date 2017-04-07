@@ -122,11 +122,8 @@ class TFRegressor:
                 self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.flat_logits, 
                                                                                    labels=self.tf_Y))
 
-                 # Add weight decay regularization term to loss
-                # TODO: ADD REGULARIZATION HERE!!
-
                 # Code for making predictions and evaluating them.
-                self.probabilities = tf.nn.sigmoid(self.flat_logits)
+                self.probabilities = tf.nn.sigmoid(self.flat_logits, name='probabilities')
                 self.predictions = tf.round(self.probabilities)
                 self.correct_prediction = tf.equal(self.predictions, self.tf_Y)
                 self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32))
@@ -136,9 +133,9 @@ class TFRegressor:
                 self.squared_errors = tf.square(tf.subtract(self.flat_logits, self.tf_Y))
                 self.rmse = tf.sqrt(tf.reduce_mean(self.squared_errors))
                 
-                # Add weight decay regularization term to loss
-                # TODO: ADD REGULARIZATION HERE!!
                 self.loss = self.rmse
+
+            self.loss = self.loss + self.weight_penalty * tf.nn.l2_loss(self.W)
 
             # Set up backpropagation computation!
             self.opt_step = self.optimizer(self.learning_rate).minimize(self.loss)

@@ -68,6 +68,7 @@ class DataLoader:
 
         return class1_X, class2_X
 
+
 def normalize_fill_df(data_df, wanted_feats, wanted_labels, suppress_output=False, remove_cols=True):
     data_df = normalize_columns(data_df, wanted_feats)
     if remove_cols:
@@ -84,7 +85,7 @@ def normalize_fill_df(data_df, wanted_feats, wanted_labels, suppress_output=Fals
 
     return data_df
 
-def get_matrices_for_dataset(data_df, wanted_feats, wanted_labels, dataset, single_output=True):
+def get_matrices_for_dataset(data_df, wanted_feats, wanted_labels, dataset, single_output=False):
     set_df = data_df[data_df['dataset']==dataset]
     
     X = set_df[wanted_feats].astype(float).as_matrix()
@@ -95,7 +96,7 @@ def get_matrices_for_dataset(data_df, wanted_feats, wanted_labels, dataset, sing
         y = set_df[wanted_labels].as_matrix()
     
     X = convert_matrix_tf_format(X)
-    y = np.asarray(y)
+    y = np.atleast_2d(np.asarray(y))
 
     return X,y
 
