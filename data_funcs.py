@@ -16,6 +16,8 @@
 import pandas as pd
 import numpy as np
 
+USE_PERSONAL_FEATS = False
+
 class DataLoader:
     def __init__(self, filename):
         self.load_and_process_data(filename)
@@ -23,7 +25,11 @@ class DataLoader:
     def load_and_process_data(self, file_path, suppress_output=False):
         df = pd.DataFrame.from_csv(file_path)
 
-        self.wanted_feats = [x for x in df.columns.values if 'label' not in x and 'dataset' not in x]
+        if USE_PERSONAL_FEATS:
+            self.wanted_feats = [x for x in df.columns.values if 'label' not in x and 'dataset' not in x]            
+        else:
+            self.wanted_feats = [x for x in df.columns.values if 'label' not in x and 'dataset' not in x and 'personal' not in x and 'subject_num' not in x and 'test_time' not in x]
+
         self.wanted_labels = [y for y in df.columns.values if 'label' in y]
 
         self.df = normalize_fill_df(df, self.wanted_feats, self.wanted_labels, 
