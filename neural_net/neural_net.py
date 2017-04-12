@@ -37,15 +37,16 @@ import time
 # Import data loading functions from parent directory.
 CODE_PATH = os.path.dirname(os.getcwd())
 sys.path.insert(1, CODE_PATH)
+NUM_SUBJECTS = 42
 import data_funcs
 
 def reload_files():
     reload(data_funcs)
 
 class NeuralNetwork:
-    def __init__(self, filename, model_name, layer_sizes=[128,64], batch_size=10, 
-                 learning_rate=.01, dropout_prob=1.0, weight_penalty=0.0, 
-                 clip_gradients=True, model_type='classification', 
+    def __init__(self, filename, model_name, layer_sizes=[128,64, 32], batch_size=25, 
+                 learning_rate=.001, dropout_prob=0.9, weight_penalty=0.1, 
+                 clip_gradients=True, model_type='regression', 
                  checkpoint_dir='./saved_models/'):
         '''Initialize the class by loading the required datasets 
         and building the graph.
@@ -73,11 +74,12 @@ class NeuralNetwork:
                 saved files containing trained network weights.
             '''
         # Hyperparameters that should be tuned
+
         self.layer_sizes = layer_sizes
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.dropout_prob = dropout_prob 
-        self.weight_penalty = weight_penalty 
+        self.weight_penalty = weight_penalty
 
         # Hyperparameters that could be tuned 
         # (but are probably the best to use)
@@ -94,6 +96,7 @@ class NeuralNetwork:
 
         # Extract the data from the filename
         self.data_loader = data_funcs.DataLoader(filename)
+        print dir(self.data_loader)
         self.input_size = self.data_loader.get_feature_size()
         if model_type == 'classification':
             print "\nPerforming classification."
@@ -126,6 +129,10 @@ class NeuralNetwork:
         The number of layers and the sizes of each layer are defined
         in the class's layer_sizes field.
         """
+        personalized_arr_weights0 = []
+        personalized_arr_biases0 = []
+        personalized_arr_weights1 = []
+        personalized_arr_biases1 = []
         sizes = []
         self.weights = []
         self.biases = []
@@ -136,19 +143,42 @@ class NeuralNetwork:
                 input_len = self.layer_sizes[i-1]
             
             if i==len(self.layer_sizes):
-                output_len = self.output_size
+                output_len = 8
+                for j in range(0, 42):
+                    layer_weights = weight_variable([input_len, output_len],name='weights' + str(i) + str(j))
+                    layer_biases = bias_variable([output_len], name='biases' + str(i))
+                    personalized_arr_weights0.append(layer_weights)
+                    personalized_arr_biases0.append(layer_biases)
+
+                    layer_weights = weight_variable([8, self.output_size],name='weights' + str(i))
+                    layer_biases = bias_variable([self.output_size], name='biases' + str(i) + str(j))
+                    personalized_arr_weights1.append(layer_weights)
+                    personalized_arr_biases1.append(layer_biases)
+
             else:
                 output_len = self.layer_sizes[i]
-                
-            layer_weights = weight_variable([input_len, output_len],name='weights' + str(i))
-            layer_biases = bias_variable([output_len], name='biases' + str(i))
+             
             
-            self.weights.append(layer_weights)
-            self.biases.append(layer_biases)
-            sizes.append((str(input_len) + "x" + str(output_len), str(output_len)))
-        
+
+            if i==len(self.layer_sizes):
+                self.weights.append(personalized_arr_weights0)
+                self.biases.append(personalized_arr_biases0)
+                self.weights.append(personalized_arr_weights1)
+                self.biases.append(personalized_arr_biases1)
+            else:
+                layer_weights = weight_variable([input_len, output_len],name='weights' + str(i))
+                layer_biases = bias_variable([output_len], name='biases' + str(i))
+                self.weights.append(layer_weights)
+                self.biases.append(layer_biases)
+                sizes.append((str(input_len) + "x" + str(output_len), str(output_len)))
+
+
+
+
+        print self.weights[0].get_shape()
         print("Okay, making a neural net with the following structure:")
-        print(sizes)
+        # print(sizes)
+
 
     def build_graph(self):
         """Constructs the tensorflow computation graph containing all variables
@@ -167,29 +197,62 @@ class NeuralNetwork:
             # Place the network weights/parameters that will be learned into the 
             # computation graph.
             self.initialize_network_weights()
-
             # Defines the actual network computations using the weights. 
-            def run_network(input_X):
-                hidden = input_X
-                for i in range(len(self.weights)):
-                    with tf.name_scope('layer' + str(i)) as scope:
-                        # tf.matmul is a simple fully connected layer. 
-                        hidden = tf.matmul(hidden, self.weights[i]) + self.biases[i]
-                        
-                        if i < len(self.weights)-1:
-                            # Apply activation function
-                            if self.activation_func == 'relu':
-                                hidden = tf.nn.relu(hidden) 
-                            # Could add more activation functions like sigmoid here
-                            # If no activation is specified, none will be applied
+            def run_network(input_X, subject_number):
+                hidden0 = input_X
+                hidden0 = tf.nn.relu(hidden0)
+                hidden0 = tf.nn.dropout(hidden0, self.tf_dropout_prob)
 
-                            # Apply dropout
-                            hidden = tf.nn.dropout(hidden, self.tf_dropout_prob) 
-                return hidden
+                hidden1 = tf.matmul(hidden0, self.weights[0]) + self.biases[0]
+                hidden1 = tf.nn.relu(hidden1)
+                hidden1 = tf.nn.dropout(hidden1, self.tf_dropout_prob)
+
+                hidden2 = tf.matmul(hidden1, self.weights[1]) + self.biases[1]
+                hidden2 = tf.nn.relu(hidden2)
+                hidden2 = tf.nn.dropout(hidden2, self.tf_dropout_prob)
+
+
+                hidden3 = tf.matmul(hidden2, self.weights[2]) + self.biases[2]
+                hidden3 = tf.nn.relu(hidden3)
+                hidden3 = tf.nn.dropout(hidden3, self.tf_dropout_prob)
+
+                hidden4_arr = []
+                for i in range(0, 42):
+                    hidden4 = tf.matmul(hidden3, self.weights[3][i]) + self.biases[3][i]
+                    hidden4 = tf.nn.relu(hidden4)
+                    hidden4 = tf.nn.dropout(hidden4, self.tf_dropout_prob)
+                    
+                    hidden4_arr.append(hidden4)
+
+                hidden5_arr = []
+                for i in range(0, 42):
+                    hidden5 = tf.matmul(hidden4_arr[i], self.weights[4][i]) + self.biases[4][i]
+                    hidden5_arr.append(hidden5)
+
+                return hidden5_arr[subject_number]
+                # hidden = input_X
+                # for i in range(len(self.weights)):
+                #     with tf.name_scope('layer' + str(i)) as scope:
+                #         # tf.matmul is a simple fully connected layer. 
+                #         hidden = tf.matmul(hidden, self.weights[i]) + self.biases[i]
+                        
+                #         if i < len(self.weights)-1:
+                #             # Apply activation function
+                #             if self.activation_func == 'relu':
+                #                 hidden = tf.nn.relu(hidden)
+                #             # Could add more activation functions like sigmoid here
+                #             # If no activation is specified, none will be applied
+
+                #             # Apply dropout
+                #             hidden = tf.nn.dropout(hidden, self.tf_dropout_prob)
+                # return hidden
+
+
             self.run_network = run_network
 
             # Compute the loss function
-            self.logits = run_network(self.tf_X)
+            print self.tf_X
+            self.logits = run_network(self.tf_X, 0)
 
             if self.model_type == 'classification':
                 # Apply a softmax function to get probabilities, train this dist against targets with
@@ -248,7 +311,9 @@ class NeuralNetwork:
 
             for step in range(num_steps):
                 # Grab a batch of data to feed into the placeholders in the graph.
-                X, Y = self.data_loader.get_train_batch(self.batch_size)
+                import random
+                r = random.randint(1, 42)
+                X, Y = self.data_loader.get_train_batch(self.batch_size, r)
                 feed_dict = {self.tf_X: X,
                              self.tf_Y: Y,
                              self.tf_dropout_prob: self.dropout_prob}
