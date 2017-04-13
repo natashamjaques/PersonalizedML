@@ -16,7 +16,7 @@
 import pandas as pd
 import numpy as np
 
-USE_PERSONAL_FEATS = False
+USE_PERSONAL_FEATS = True
 
 class DataLoader:
     def __init__(self, filename):
@@ -45,6 +45,8 @@ class DataLoader:
         
         self.val_X, self.val_Y = get_matrices_for_dataset(self.df, self.wanted_feats, 
                                                         self.wanted_labels, 'Val')
+        print('val!')
+        print(self.val_X, self.val_Y)
         if not suppress_output: print len(self.val_X), "rows in validation data"
         
         self.test_X, self.test_Y = get_matrices_for_dataset(self.df, self.wanted_feats, 
@@ -58,10 +60,11 @@ class DataLoader:
 
         personal_train_X, personal_train_Y = get_personalized_matrices_for_dataset(self.df, self.wanted_feats, 
                                                             self.wanted_labels, 'Train', subject_num)
-        idx = np.random.choice(len(personal_train_X), size=batch_size)
+        
         #print('personal train X and Y are')
         #print(personal_train_X)
         #print(personal_train_Y)
+        idx = np.random.choice(len(personal_train_X), size=batch_size)
         return personal_train_X[idx], personal_train_Y[idx]
 
     def get_train_batch(self, batch_size):
@@ -110,7 +113,9 @@ def normalize_fill_df(data_df, wanted_feats, wanted_labels, suppress_output=Fals
     return data_df
 
 def get_personalized_matrices_for_dataset(data_df, wanted_feats, wanted_labels, dataset, subject_num, single_output=False):
-    set_df = data_df[(data_df['dataset']==dataset) & (data_df['subject_num']==subject_num)]
+    set_df = data_df[(data_df['dataset']==dataset)] #& (data_df['subject_num']==subject_num)
+
+    #print(subject_num)
     
     X = set_df[wanted_feats].astype(float).as_matrix()
     
@@ -147,10 +152,14 @@ def convert_matrix_tf_format(X):
 def normalize_columns(df, wanted_feats):
     train_df = df[df['dataset']=='Train']
     for feat in wanted_feats:
-        train_mean = np.mean(train_df[feat].dropna().tolist())
-        train_std = np.std(train_df[feat].dropna().tolist())
-        zscore = lambda x: (x - train_mean) / train_std
-        df[feat] = df[feat].apply(zscore)
+
+        if not feat == 'subject_num':
+            train_mean = np.mean(train_df[feat].dropna().tolist())
+            train_std = np.std(train_df[feat].dropna().tolist())
+            zscore = lambda x: (x - train_mean) / train_std
+            df[feat] = df[feat].apply(zscore)
+        else:
+            print 'skipping normalization for subject_num'
     return df
 
 def find_null_columns(df, features):
