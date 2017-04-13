@@ -45,8 +45,8 @@ class DataLoader:
         
         self.val_X, self.val_Y = get_matrices_for_dataset(self.df, self.wanted_feats, 
                                                         self.wanted_labels, 'Val')
-        print('val!')
-        print(self.val_X, self.val_Y)
+        #print('val!')
+        #print(self.val_X, self.val_Y)
         if not suppress_output: print len(self.val_X), "rows in validation data"
         
         self.test_X, self.test_Y = get_matrices_for_dataset(self.df, self.wanted_feats, 

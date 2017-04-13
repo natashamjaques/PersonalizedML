@@ -300,11 +300,11 @@ class NeuralNetwork:
             self.params = tf.trainable_variables()
             #print('trainable variables are')
             #print(self.params)
-            self.gradients = tf.gradients(self.loss, self.personal_training_params)
+            self.gradients = tf.gradients(self.loss, self.params)
             if self.clip_gradients:
                 self.gradients, _ = tf.clip_by_global_norm(self.gradients, 5)
             self.tf_optimizer = self.optimizer(self.learning_rate)
-            self.opt_step = self.tf_optimizer.apply_gradients(zip(self.gradients, self.personal_training_params),
+            self.opt_step = self.tf_optimizer.apply_gradients(zip(self.gradients, self.params),
                                                               self.global_step)
 
             # Necessary for tensorflow to build graph
@@ -351,7 +351,7 @@ class NeuralNetwork:
                 # Output/save the training and validation performance every few steps.
                 if step % self.output_every_nth == 0:
                     # Grab a batch of validation data too.
-                    val_X, val_Y = self.data_loader.get_personalized_val_data(train_subject)
+                    val_X, val_Y = self.data_loader.get_personalized_val_data(train_subject+1)
                     val_feed_dict = {self.tf_X: val_X,
                                      self.tf_Y: val_Y,
                                      self.tf_dropout_prob: 1.0, # no dropout during evaluation
@@ -467,6 +467,8 @@ class NeuralNetwork:
         scores = []
         for i in range(0, NUM_SUBJECTS):
             X,Y = self.data_loader.get_personalized_val_data(i+1)
+            #print X.shape
+            #print Y.shape
             val_score = self.get_performance_on_data(X,Y,i)
             print val_score
             scores.append(val_score)
