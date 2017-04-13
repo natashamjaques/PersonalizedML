@@ -278,12 +278,12 @@ class NeuralNetwork:
                 self.squared_errors = tf.square(tf.subtract(self.logits, self.tf_Y)) #changed here to make personalized
                 self.rmse = tf.sqrt(tf.reduce_mean(self.squared_errors))
                 
-                 # Add weight decay regularization term to loss
-                self.loss = self.rmse + self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])
+                 # Add weight decay regularization term to loss                
+                self.loss = self.rmse + self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])                
 
                 # Dont forget to regularize the personal weights!!
-                self.loss = self.loss + self.weight_penalty * sum([tf.nn.l2_loss(self.p_weights0)])
-                self.loss = self.loss + self.weight_penalty * sum([tf.nn.l2_loss(self.p_weights1)])
+                self.loss = self.loss + self.weight_penalty * sum([tf.nn.l2_loss(self.p_weights0)])                
+                self.loss = self.loss + self.weight_penalty * sum([tf.nn.l2_loss(self.p_weights1)])                
 
             # Set up backpropagation computation!
             self.global_step = tf.Variable(0, trainable=False, name='global_step')
