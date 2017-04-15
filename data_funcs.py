@@ -45,8 +45,7 @@ class DataLoader:
         
         self.val_X, self.val_Y = get_matrices_for_dataset(self.df, self.wanted_feats, 
                                                         self.wanted_labels, 'Val')
-        #print('val!')
-        #print(self.val_X, self.val_Y)
+        
         if not suppress_output: print len(self.val_X), "rows in validation data"
         
         self.test_X, self.test_Y = get_matrices_for_dataset(self.df, self.wanted_feats, 
@@ -57,9 +56,9 @@ class DataLoader:
 
         personal_train_X, personal_train_Y = get_personalized_matrices_for_dataset(self.df, self.wanted_feats, 
                                                             self.wanted_labels, 'Train', subject_num)
-        
         idx = np.random.choice(len(personal_train_X), size=batch_size)
-        return personal_train_X[idx], personal_train_Y[idx]
+        return personal_train_X[idx], personal_train_Y[idx]   
+        
 
     def get_train_batch(self, batch_size):
         idx = np.random.choice(len(self.train_X), size=batch_size)
@@ -69,6 +68,11 @@ class DataLoader:
         personal_val_X, personal_val_Y = get_personalized_matrices_for_dataset(self.df, self.wanted_feats, 
                                                             self.wanted_labels, 'Val', subject_num)
         return personal_val_X, personal_val_Y
+
+    def get_personalized_test_data(self, subject_num):
+        personal_test_X, personal_test_Y = get_personalized_matrices_for_dataset(self.df, self.wanted_feats,
+                                                            self.wanted_labels, 'Test', subject_num)
+        return personal_test_X, personal_test_Y    
 
     def get_val_data(self):
         return self.val_X, self.val_Y

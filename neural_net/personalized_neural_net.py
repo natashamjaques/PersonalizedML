@@ -99,7 +99,7 @@ class NeuralNetwork:
 
         # Extract the data from the filename
         self.data_loader = data_funcs.DataLoader(filename)
-        #print dir(self.data_loader)
+
         self.input_size = self.data_loader.get_feature_size()
         if model_type == 'classification':
             print "\nPerforming classification."
@@ -246,8 +246,6 @@ class NeuralNetwork:
             self.run_network = run_network
 
             # Compute the loss function
-            print('TF_X shape')
-            print(self.tf_X.get_shape())
 
             self.logits = run_network(self.tf_X, self.subject_num)
 
@@ -336,7 +334,7 @@ class NeuralNetwork:
 
 
                 X, Y = self.data_loader.get_personalized_train_batch(self.batch_size, train_subject+1) 
-                #the data is 1 index'd in csv, but 0 indexd everywhere else
+                #the data is 1 index'd in csv, but 0 index'd everywhere else
                 
                 feed_dict = {self.tf_X: X,
                              self.tf_Y: Y,
@@ -485,6 +483,30 @@ class NeuralNetwork:
         print "Final", self.metric_name, "on test data is:", score
         return score
 
+    def test_on_test_with_logits(self):
+        """Returns performance on the model's test set."""
+        print "WARNING! Only test on the test set when you have finished choosing all of your hyperparameters!"
+        print "\tNever use the test set to choose hyperparameters!!!"
+
+        scores = []
+        pop_logit_metrics = []
+
+        for i in range(0, NUM_SUBJECTS):
+            X,Y = self.data_loader.get_personalized_test_data(i+1)
+
+            score, logit_metrics = self.get_performance_on_data_with_logits(X,Y, i)
+            pop_logit_metrics.append(logit_metrics)
+            scores.append(score)
+
+        print "Final", self.metric_name, "on test data is:", np.mean(scores)
+        print "logits_metrics are"
+        print(len(pop_logit_metrics)) #should be 42
+        print pop_logit_metrics
+        
+        #for i in range(0, len(logits)):
+        #    print(logits[i][0])
+        return scores, pop_logit_metrics
+
     def get_performance_on_data(self, X, Y, i):
         """Returns the model's performance on input data X and targets Y."""
         feed_dict = {self.tf_X: X,
@@ -498,6 +520,27 @@ class NeuralNetwork:
             score = self.session.run(self.rmse, feed_dict)
         
         return score
+
+    def get_performance_on_data_with_logits(self, X, Y, i):
+        """Returns the model's performance on input data X and targets Y."""
+        feed_dict = {self.tf_X: X,
+                     self.tf_Y: Y,
+                     self.tf_dropout_prob: 1.0, # no dropout during evaluation
+                     self.subject_num: i}
+
+        l1s = []                    
+        l2s = []                     
+        
+        if self.model_type == 'classification':
+            score = self.session.run(self.accuracy, feed_dict)
+        else: # regression
+            score, logits = self.session.run([self.rmse, self.logits], feed_dict)
+
+        for i in range(0, len(logits)):
+            l1s.append(logits[i][0])
+            l2s.append(logits[i][1])
+        
+        return score, [np.mean(l1s), np.mean(l2s), np.std(l1s), np.std(l2s)]
 
 def weight_variable(shape,name):
     """Initializes a tensorflow weight variable with random
