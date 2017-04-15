@@ -33,23 +33,20 @@ import sys
 import os
 import math
 import time
-import random
 
 # Import data loading functions from parent directory.
 CODE_PATH = os.path.dirname(os.getcwd())
 sys.path.insert(1, CODE_PATH)
 NUM_SUBJECTS = 42
-PERSONALIZED_HIDDEN_LAYER_SIZE = 8
-
 import data_funcs
 
 def reload_files():
     reload(data_funcs)
 
 class NeuralNetwork:
-    def __init__(self, filename, model_name, layer_sizes=[128,64, 32], batch_size=25, 
-                 learning_rate=.001, dropout_prob=0.9, weight_penalty=0.1, 
-                 clip_gradients=True, model_type='regression', 
+    def __init__(self, filename, model_name, layer_sizes=[128,64], batch_size=10, 
+                 learning_rate=.01, dropout_prob=1.0, weight_penalty=0.0, 
+                 clip_gradients=True, model_type='classification', 
                  checkpoint_dir='./saved_models/'):
         '''Initialize the class by loading the required datasets 
         and building the graph.
@@ -77,12 +74,11 @@ class NeuralNetwork:
                 saved files containing trained network weights.
             '''
         # Hyperparameters that should be tuned
-
         self.layer_sizes = layer_sizes
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.dropout_prob = dropout_prob 
-        self.weight_penalty = weight_penalty
+        self.weight_penalty = weight_penalty 
 
         # Hyperparameters that could be tuned 
         # (but are probably the best to use)
@@ -99,7 +95,6 @@ class NeuralNetwork:
 
         # Extract the data from the filename
         self.data_loader = data_funcs.DataLoader(filename)
-        #print dir(self.data_loader)
         self.input_size = self.data_loader.get_feature_size()
         if model_type == 'classification':
             print "\nPerforming classification."
@@ -132,26 +127,19 @@ class NeuralNetwork:
         The number of layers and the sizes of each layer are defined
         in the class's layer_sizes field.
         """
-        
-        self.p_weights0 = []
-        self.p_biases0 = []
-
-        self.p_weights1 = []
-        self.p_biases1 = []        
-
         sizes = []
         self.weights = []
         self.biases = []
-
-        #handle all the FC layers. For a 128x64x32 x (8 * 42) * (2 * 42) arch., ends at the 32 layer
-        for i in range(len(self.layer_sizes)): 
+        for i in range(len(self.layer_sizes)+1):
             if i==0:
                 input_len = self.input_size # X second dimension
             else:
                 input_len = self.layer_sizes[i-1]
-
-
-            output_len = self.layer_sizes[i]                
+            
+            if i==len(self.layer_sizes):
+                output_len = self.output_size
+            else:
+                output_len = self.layer_sizes[i]
                 
             layer_weights = weight_variable([input_len, output_len],name='weights' + str(i))
             layer_biases = bias_variable([output_len], name='biases' + str(i))
@@ -159,37 +147,9 @@ class NeuralNetwork:
             self.weights.append(layer_weights)
             self.biases.append(layer_biases)
             sizes.append((str(input_len) + "x" + str(output_len), str(output_len)))
-
-        # set up hidden personalized layer weights
-        input_len = self.layer_sizes[-1] # last hidden layer size        
-        print('last non-personalized layer size was')
-        print(input_len)
-
-        for j in range(0, NUM_SUBJECTS):
-            layer_weights = weight_variable([input_len, PERSONALIZED_HIDDEN_LAYER_SIZE],name='weights' + str(len(self.layer_sizes)) + str(j))
-            layer_biases = bias_variable([PERSONALIZED_HIDDEN_LAYER_SIZE], name='biases' + str(len(self.layer_sizes)))
-
-            #self.p_weights0 is the hidden personalized layer
-            self.p_weights0.append(layer_weights)
-            self.p_biases0.append(layer_biases)
-
-            # set up weights from personalized hidden layer to personalized output layer
-            layer_weights = weight_variable([PERSONALIZED_HIDDEN_LAYER_SIZE, self.output_size],name='weights' + str(i))
-            layer_biases = bias_variable([self.output_size], name='biases' + str(i) + str(j))
-
-            #personalized_arr_weights1 is the personalized output layer
-            self.p_weights1.append(layer_weights)
-            self.p_biases1.append(layer_biases)
-
-        print self.weights[0].get_shape()
+        
         print("Okay, making a neural net with the following structure:")
-        print('Non-Personalized Layers:')
         print(sizes)
-        print('Personalized Layers:')
-        print(str(len(self.p_weights0)) + ' parallel copies of a ' + str(self.p_weights0[0].get_shape()) + ' layer')
-        print(' and ')
-        print(str(len(self.p_weights1)) + ' parallel copies of a ' + str(self.p_weights1[0].get_shape()) + ' layer')
-
 
     def build_graph(self):
         """Constructs the tensorflow computation graph containing all variables
@@ -198,8 +158,6 @@ class NeuralNetwork:
 
         with self.graph.as_default():
             # Placeholders can be used to feed in different data during training time.
-
-            self.subject_num = tf.placeholder(tf.int32, name="subject_num") # subject number we are using in this minibatch
             self.tf_X = tf.placeholder(tf.float32, name="X") # features
             if self.model_type == 'classification':
                 self.tf_Y = tf.placeholder(tf.int32, name="Y") # labels
@@ -210,85 +168,30 @@ class NeuralNetwork:
             # Place the network weights/parameters that will be learned into the 
             # computation graph.
             self.initialize_network_weights()
+
             # Defines the actual network computations using the weights. 
             def run_network(input_X):
-                hidden0 = input_X
-
-                # not sure we need activation and dropout in the input layer?
-                #hidden0 = tf.nn.relu(hidden0)
-                #hidden0 = tf.nn.dropout(hidden0, self.tf_dropout_prob)
-
-                hidden1 = tf.matmul(hidden0, self.weights[0]) + self.biases[0]
-                hidden1 = tf.nn.relu(hidden1)
-                hidden1 = tf.nn.dropout(hidden1, self.tf_dropout_prob)
-
-                print('hidden1 has shape')
-                print(hidden1.get_shape())
-
-                hidden2 = tf.matmul(hidden1, self.weights[1]) + self.biases[1]
-                hidden2 = tf.nn.relu(hidden2)
-                hidden2 = tf.nn.dropout(hidden2, self.tf_dropout_prob)
-                print('hidden2 has shape')
-                print(hidden2.get_shape())
-
-
-                hidden3 = tf.matmul(hidden2, self.weights[2]) + self.biases[2]
-                hidden3 = tf.nn.relu(hidden3)
-                hidden3 = tf.nn.dropout(hidden3, self.tf_dropout_prob)
-                print('hidden3 has shape')
-                print(hidden3.get_shape())
-
-                
-                # will be a list of NUM_SUBJECTS elements, each of which should be a list of PERSONALIZED_HIDDEN_LAYER_SIZE values
-                hidden4_outputs = []
-
-                for i in range(0, NUM_SUBJECTS):
-                    hidden4 = tf.matmul(hidden3, self.p_weights0[i]) + self.p_biases0[i]
-                    hidden4 = tf.nn.relu(hidden4)
-                    hidden4 = tf.nn.dropout(hidden4, self.tf_dropout_prob)
-                    hidden4_outputs.append(hidden4)
-
-                # will be a list of NUM_SUBJECTS elements, each of which should be a list of PERSONALIZED_HIDDEN_LAYER_SIZE values
-                hidden5_outputs = []
-                for i in range(0, NUM_SUBJECTS):
-                    hidden5 = tf.matmul(hidden4_outputs[i], self.p_weights1[i]) + self.p_biases1[i]
-                    hidden5_outputs.append(hidden5)
-
-                print('returning output of hidden5!')
-                print(hidden5_outputs[0].get_shape())  
-                return hidden5_outputs
-
-                # hidden = input_X
-                # for i in range(len(self.weights)):
-                #     with tf.name_scope('layer' + str(i)) as scope:
-                #         # tf.matmul is a simple fully connected layer. 
-                #         hidden = tf.matmul(hidden, self.weights[i]) + self.biases[i]
+                hidden = input_X
+                for i in range(len(self.weights)):
+                    with tf.name_scope('layer' + str(i)) as scope:
+                        # tf.matmul is a simple fully connected layer. 
+                        hidden = tf.matmul(hidden, self.weights[i]) + self.biases[i]
                         
-                #         if i < len(self.weights)-1:
-                #             # Apply activation function
-                #             if self.activation_func == 'relu':
-                #                 hidden = tf.nn.relu(hidden)
-                #             # Could add more activation functions like sigmoid here
-                #             # If no activation is specified, none will be applied
+                        if i < len(self.weights)-1:
+                            # Apply activation function
+                            if self.activation_func == 'relu':
+                                hidden = tf.nn.relu(hidden) 
+                            # Could add more activation functions like sigmoid here
+                            # If no activation is specified, none will be applied
 
-                #             # Apply dropout
-                #             hidden = tf.nn.dropout(hidden, self.tf_dropout_prob)
-                # return hidden
-
-
+                            # Apply dropout
+                            hidden = tf.nn.dropout(hidden, self.tf_dropout_prob) 
+                return hidden
             self.run_network = run_network
 
             # Compute the loss function
-            print('TF_X shape')
-            print(self.tf_X.get_shape())
-            self.logits = run_network(self.tf_X) 
+            self.logits = run_network(self.tf_X)
 
-            #subject loss should be of type 1x2
-            self.subject_output = tf.gather(self.logits, self.subject_num)
-            print('subject output is of shape!')
-            print(self.subject_output.get_shape())
-
-            
             if self.model_type == 'classification':
                 # Apply a softmax function to get probabilities, train this dist against targets with
                 # cross entropy loss.
@@ -307,7 +210,7 @@ class NeuralNetwork:
             
             else: # regression
                 # Apply mean squared error loss.
-                self.squared_errors = tf.square(tf.subtract(self.subject_output, self.tf_Y)) #changed here to make personalized
+                self.squared_errors = tf.square(tf.subtract(self.logits, self.tf_Y))
                 self.rmse = tf.sqrt(tf.reduce_mean(self.squared_errors))
                 
                  # Add weight decay regularization term to loss
@@ -315,20 +218,7 @@ class NeuralNetwork:
 
             # Set up backpropagation computation!
             self.global_step = tf.Variable(0, trainable=False, name='global_step')
-
-            trainable_p_biases0 = self.p_biases0[(self.subject_num)]
-            trainable_p_biases1 = self.p_biases1.gather(self.subject_num)
-            trainable_p_weights0 = self.p_weights0.gather(self.subject_num)
-            trainable_p_weights1 = self.p_weights1.gather(self.subject_num)
-            personal_training_params = np.array([self.weights, self.biases, trainable_p_weights1, trainable_p_weights0, trainable_p_biases1, trainable_p_biases0]).flatten()
-            print('personal training params')
-            print(personal_training_params)
-
-            # here we need to get a list of all the personalized weights for the subject we are interested in!
-            # plus all the shared weights
-
-            #print('trainable variables are')
-            #print(self.params)
+            self.params = tf.trainable_variables()
             self.gradients = tf.gradients(self.loss, self.params)
             if self.clip_gradients:
                 self.gradients, _ = tf.clip_by_global_norm(self.gradients, 5)
@@ -339,7 +229,7 @@ class NeuralNetwork:
             # Necessary for tensorflow to build graph
             self.init = tf.global_variables_initializer()
 
-    def train(self, num_steps=30000, output_every_nth=None, subject_num=1):
+    def train(self, num_steps=30000, output_every_nth=None):
         """Trains using stochastic gradient descent (SGD). 
         
         Runs batches of training data through the model for a given
@@ -359,33 +249,22 @@ class NeuralNetwork:
 
             for step in range(num_steps):
                 # Grab a batch of data to feed into the placeholders in the graph.
-                
-                idx = random.randint(0, NUM_SUBJECTS-1)
-                train_subject = np.arange(0, NUM_SUBJECTS)[idx] #we need a numpy int32 dtype
-                print('idx is ' + str(idx))
-                print('subject is ' + str(train_subject))
-
-                X, Y = self.data_loader.get_personalized_train_batch(self.batch_size, train_subject+1) 
-                #the data is 1 index'd in csv, but 0 indexd everywhere else
-                
+                X, Y = self.data_loader.get_train_batch(self.batch_size)
                 feed_dict = {self.tf_X: X,
                              self.tf_Y: Y,
-                             self.tf_dropout_prob: self.dropout_prob,
-                             self.subject_num: train_subject}                
+                             self.tf_dropout_prob: self.dropout_prob}
                 
                 # Update parameters in the direction of the gradient computed by
                 # the optimizer.
-                
                 _ = self.session.run([self.opt_step], feed_dict)
 
                 # Output/save the training and validation performance every few steps.
                 if step % self.output_every_nth == 0:
                     # Grab a batch of validation data too.
-                    val_X, val_Y = self.data_loader.get_personalized_val_data(train_subject)
+                    val_X, val_Y = self.data_loader.get_val_data()
                     val_feed_dict = {self.tf_X: val_X,
                                      self.tf_Y: val_Y,
-                                     self.tf_dropout_prob: 1.0, # no dropout during evaluation
-                                     self.subject_num: train_subject} 
+                                     self.tf_dropout_prob: 1.0} # no dropout during evaluation
 
                     if self.model_type == 'classification':
                         train_score, loss = self.session.run([self.accuracy, self.loss], feed_dict)
@@ -494,10 +373,17 @@ class NeuralNetwork:
 
     def test_on_validation(self):
         """Returns performance on the model's validation set."""
-        score = self.get_performance_on_data(self.data_loader.val_X,
-                                             self.data_loader.val_Y)
-        print "Final", self.metric_name, "on validation data is:", score
-        return score
+        scores = []
+        for i in range(0, NUM_SUBJECTS):
+            X,Y = self.data_loader.get_personalized_val_data(i+1)
+            #print X.shape
+            #print Y.shape
+            val_score = self.get_performance_on_data(X,Y)
+            print val_score
+            scores.append(val_score)
+        print "Final", self.metric_name, "on validation data is:", np.mean(scores)
+        print scores
+        return np.mean(scores)
         
     def test_on_test(self):
         """Returns performance on the model's test set."""
@@ -520,6 +406,50 @@ class NeuralNetwork:
             score = self.session.run(self.rmse, feed_dict)
         
         return score
+    def test_on_test_with_logits(self):
+        """Returns performance on the model's test set."""
+        print "WARNING! Only test on the test set when you have finished choosing all of your hyperparameters!"
+        print "\tNever use the test set to choose hyperparameters!!!"
+
+        scores = []
+        pop_logit_metrics = []
+
+        for i in range(0, NUM_SUBJECTS):            
+            X,Y = self.data_loader.get_personalized_test_data(i+1)            
+
+            score, logit_metrics = self.get_performance_on_data_with_logits(X,Y)
+            pop_logit_metrics.append(logit_metrics)
+            scores.append(score)
+
+        print "Final", self.metric_name, "on test data is:", score
+        print "logits_metrics are"
+        print(len(pop_logit_metrics)) #should be 42
+        print pop_logit_metrics
+        
+        #for i in range(0, len(logits)):
+        #    print(logits[i][0])
+        return scores, pop_logit_metrics
+
+    def get_performance_on_data_with_logits(self, X, Y):
+        """Returns the model's performance on input data X and targets Y."""
+        feed_dict = {self.tf_X: X,
+                     self.tf_Y: Y,
+                     self.tf_dropout_prob: 1.0, # no dropout during evaluation
+                     }
+
+        l1s = []                    
+        l2s = []
+        
+        if self.model_type == 'classification':
+            score = self.session.run(self.accuracy, feed_dict)
+        else: # regression
+            score, logits = self.session.run([self.rmse, self.logits], feed_dict)
+
+            for i in range(0, len(logits)):
+                l1s.append(logits[i][0])
+                l2s.append(logits[i][1])
+        
+        return score, [np.mean(l1s), np.mean(l2s), np.std(l1s), np.std(l2s)]        
 
 def weight_variable(shape,name):
     """Initializes a tensorflow weight variable with random
